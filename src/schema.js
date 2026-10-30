@@ -1,6 +1,6 @@
 // The whole schema. SQLite, in the browser, persisted to IndexedDB.
 // Bump SCHEMA_VERSION and add a step to MIGRATIONS to change it later.
-export const SCHEMA_VERSION = 1
+export const SCHEMA_VERSION = 2
 
 export const MIGRATIONS = [
   // 1
@@ -120,6 +120,42 @@ export const MIGRATIONS = [
     path        TEXT PRIMARY KEY,
     fingerprint TEXT NOT NULL,                    -- size:mtime, re-imported when it changes
     imported_at TEXT NOT NULL
+  );
+  `,
+  // 2: benchmarks per checkpoint, a trade ledger, and hand-entered assets and loans
+  `
+  ALTER TABLE checkpoints ADD COLUMN benchmarks TEXT NOT NULL DEFAULT '{}';   -- {"nifty50": 24500, "sp500": 560}
+
+  -- Every buy and sell your agent could read from a tradebook or a CAS. It is what makes
+  -- XIRR exact and capital gains possible; nothing in the app needs it to run.
+  CREATE TABLE ledger (
+    id         TEXT PRIMARY KEY,                  -- the broker's trade id, else a hash of the row: ingest is idempotent
+    sleeve     TEXT NOT NULL,
+    symbol     TEXT NOT NULL,
+    isin       TEXT,
+    name       TEXT,
+    trade_date TEXT NOT NULL,
+    side       TEXT NOT NULL CHECK (side IN ('buy', 'sell')),
+    qty        REAL NOT NULL,
+    price      REAL NOT NULL,                     -- per unit, in the instrument's own currency
+    fx_rate    REAL NOT NULL DEFAULT 1,
+    currency   TEXT NOT NULL DEFAULT 'INR',
+    fees_inr   REAL NOT NULL DEFAULT 0,
+    source     TEXT
+  );
+  CREATE INDEX ledger_date ON ledger (trade_date);
+
+  -- Assets with no MCP behind them (NPS, PPF, property...) and loans. Several dated
+  -- entries per item, so history keeps what was true then: a checkpoint reads the
+  -- latest entry on or before its date.
+  CREATE TABLE manual_assets (
+    kind        TEXT NOT NULL,
+    name        TEXT NOT NULL,
+    as_of_date  TEXT NOT NULL,
+    value_inr   REAL NOT NULL,                    -- positive; a loan is a positive amount owed
+    liability   INTEGER NOT NULL DEFAULT 0,
+    note        TEXT,
+    PRIMARY KEY (kind, name, as_of_date)
   );
   `,
 ]

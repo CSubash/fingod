@@ -3,9 +3,12 @@
 // idempotent — re-importing a file never duplicates anything.
 import { all, first, scalar, write, setSetting } from './db.js'
 import { money } from './compute/num.js'
+import { BENCHMARKS } from './compute/benchmark.js'
 
 export const SLEEVES = ['in_equity', 'in_mf', 'us_equity', 'gold', 'debt', 'btc']
 export const BALANCE_KINDS = ['cash', 'credit_card', 'epf']
+export const ASSET_KINDS = ['nps', 'ppf', 'property', 'gold_physical', 'vehicle', 'other']
+export const LIABILITY_KINDS = ['home_loan', 'car_loan', 'personal_loan', 'education_loan', 'other']
 const DATE = /^\d{4}-\d{2}-\d{2}$/
 const isNum = (v) => v !== null && v !== '' && Number.isFinite(Number(v))
 const nullable = (v) => (v === undefined || v === null || v === '' ? null : Number(v))
@@ -47,6 +50,10 @@ export function validateCheckpoint(p) {
     if (refs.has(key)) bad(`balances[${i}]: duplicate ${b.kind}/${b.ref}`)
     refs.add(key)
   })
+  for (const [k, v] of Object.entries(p.benchmarks || {})) {
+    if (!BENCHMARKS[k]) bad(`benchmarks.${k}: unknown benchmark, expected ${Object.keys(BENCHMARKS).join(' or ')}`)
+    else if (!isNum(v) || Number(v) <= 0) bad(`benchmarks.${k}: must be a positive number`)
+  }
   if (problems.length) fail(problems.length > 6 ? `${problems.slice(0, 6).join('; ')}; and ${problems.length - 6} more` : problems.join('; '))
 }
 
@@ -59,8 +66,8 @@ export function ingestCheckpoint(p) {
 
   write((run) => {
     run('DELETE FROM checkpoints WHERE as_of_date = ?', [p.as_of_date])
-    run('INSERT INTO checkpoints (as_of_date, usd_inr, sources, created_at) VALUES (?, ?, ?, ?)',
-      [p.as_of_date, usd, JSON.stringify(p.sources || {}), new Date().toISOString()])
+    run('INSERT INTO checkpoints (as_of_date, usd_inr, sources, benchmarks, created_at) VALUES (?, ?, ?, ?, ?)',
+      [p.as_of_date, usd, JSON.stringify(p.sources || {}), JSON.stringify(p.benchmarks || {}), new Date().toISOString()])
     const id = scalar('SELECT id FROM checkpoints WHERE as_of_date = ?', [p.as_of_date])
 
     const hasBtc = p.holdings.some((h) => h.sleeve === 'btc')
@@ -120,10 +127,39 @@ export function ingestTransactions(payload) {
   return { transactions: list.length }
 }
 
+/** Upsert trade-ledger rows (idempotent on the broker's trade id, else on the row's own content). */
+export function ingestLedger(payload) {
+  const list = payload && payload.ledger
+  if (!Array.isArray(list)) fail('expected {"ledger": [...]}')
+  const problems = []
+  list.forEach((t, i) => {
+    const at = `ledger[${i}]${t && t.symbol ? ` (${t.symbol})` : ''}`
+    if (!t || !SLEEVES.includes(t.sleeve)) return problems.push(`${at}: sleeve must be one of ${SLEEVES.join(', ')}`)
+    if (!t.symbol) problems.push(`${at}: symbol is required`)
+    if (!DATE.test(t.trade_date || '')) problems.push(`${at}: trade_date must be YYYY-MM-DD`)
+    if (!['buy', 'sell'].includes(t.side)) problems.push(`${at}: side must be buy or sell`)
+    if (!isNum(t.qty) || Number(t.qty) <= 0) problems.push(`${at}: qty must be a positive number`)
+    if (!isNum(t.price) || Number(t.price) < 0) problems.push(`${at}: price must be a number`)
+    if (t.currency && t.currency !== 'INR' && !isNum(t.fx_rate)) problems.push(`${at}: a ${t.currency} trade needs fx_rate`)
+  })
+  if (problems.length) fail(problems.length > 6 ? `${problems.slice(0, 6).join('; ')}; and ${problems.length - 6} more` : problems.join('; '))
+  write((run) => {
+    for (const t of list) {
+      const id = t.id || [t.sleeve, t.isin || t.symbol, t.trade_date, t.side, Number(t.qty), Number(t.price)].join('|')
+      run(`INSERT INTO ledger (id, sleeve, symbol, isin, name, trade_date, side, qty, price, fx_rate, currency, fees_inr, source) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)
+           ON CONFLICT(id) DO UPDATE SET sleeve=excluded.sleeve, symbol=excluded.symbol, isin=excluded.isin, name=excluded.name, trade_date=excluded.trade_date, side=excluded.side,
+             qty=excluded.qty, price=excluded.price, fx_rate=excluded.fx_rate, currency=excluded.currency, fees_inr=excluded.fees_inr, source=excluded.source`,
+        [String(id), t.sleeve, t.symbol, t.isin || null, t.name || t.symbol, t.trade_date, t.side, Number(t.qty), Number(t.price), t.currency && t.currency !== 'INR' ? Number(t.fx_rate) : 1, t.currency || 'INR', nullable(t.fees_inr) ?? 0, t.source || null])
+    }
+  })
+  return { ledger: list.length }
+}
+
 /** A file's kind, from its contents. */
 export function classify(payload) {
   if (payload && Array.isArray(payload.holdings) && payload.as_of_date) return 'checkpoint'
-  if (payload && !Array.isArray(payload) && ['fixed_deposits', 'splitwise', 'trades', 'target_allocation'].some((k) => k in payload)) return 'standing'
+  if (payload && !Array.isArray(payload) && Array.isArray(payload.ledger)) return 'ledger'
+  if (payload && !Array.isArray(payload) && ['fixed_deposits', 'splitwise', 'trades', 'target_allocation', 'assets', 'liabilities'].some((k) => k in payload)) return 'standing'
   if (payload && (Array.isArray(payload.transactions) || Array.isArray(payload))) return 'transactions'
   return null
 }
@@ -132,13 +168,14 @@ export function ingestAny(payload) {
   const kind = classify(payload)
   if (kind === 'checkpoint') return { kind, ...ingestCheckpoint(payload) }
   if (kind === 'transactions') return { kind, ...ingestTransactions(payload) }
+  if (kind === 'ledger') return { kind, ...ingestLedger(payload) }
   if (kind === 'standing') return { kind, ...ingestStanding(payload) }
-  fail('not a fingod file: expected a checkpoint ({as_of_date, holdings}), {transactions} or standing rows')
+  fail('not a fingod file: expected a checkpoint ({as_of_date, holdings}), {transactions}, {ledger} or standing rows')
 }
 
 /** Pull in everything the agent has dropped into data/. Needs serve.py (or any
  * server exposing /data/manifest.json). Returns what changed. */
-const INBOX_DIRS = ['checkpoints', 'standing', 'transactions']
+const INBOX_DIRS = ['checkpoints', 'standing', 'transactions', 'ledger']
 
 /** serve.py lists data/ at /data/manifest.json. Any plain static server (python3 -m
  * http.server, which runs nothing from this repo) lists directories as HTML
@@ -180,7 +217,7 @@ export async function syncInbox() {
   if (!available) return { available: false, imported: [], errors: [] }
 
   const imported = [], errors = []
-  const files = listed.filter((f) => f.path.endsWith('.json') && /^(checkpoints|standing|transactions)\//.test(f.path)).sort((a, b) => a.path.localeCompare(b.path))
+  const files = listed.filter((f) => f.path.endsWith('.json') && /^(checkpoints|standing|transactions|ledger)\//.test(f.path)).sort((a, b) => a.path.localeCompare(b.path))
   for (const f of files) {
     const fingerprint = `${f.size}:${f.mtime}`
     const seen = first('SELECT fingerprint FROM imported_files WHERE path = ?', [f.path])
@@ -241,13 +278,15 @@ export function saveFixedDeposit(fd) {
 /** Standing rows from a file: fixed deposits, Splitwise, confirmed trades and the target
  * allocation. Idempotent — a deposit is matched on bank + principal + start date. */
 export function ingestStanding(p) {
-  const out = { fixed_deposits: 0, splitwise: 0, trades: 0, target_allocation: false }
+  const out = { fixed_deposits: 0, splitwise: 0, trades: 0, assets: 0, liabilities: 0, target_allocation: false }
   for (const fd of p.fixed_deposits || []) {
     const hit = first('SELECT id FROM fixed_deposits WHERE bank = ? AND principal = ? AND start_date = ?', [fd.bank, Number(fd.principal), fd.start_date])
     saveFixedDeposit({ ...fd, id: hit ? hit.id : undefined }); out.fixed_deposits++
   }
   for (const s of p.splitwise || []) { saveSplitwise(s.person, s.amount_inr, s.note || ''); out.splitwise++ }
   for (const t of p.trades || []) { recordTrade(t); out.trades++ }
+  for (const a of p.assets || []) { saveAsset({ ...a, liability: false }); out.assets++ }
+  for (const a of p.liabilities || []) { saveAsset({ ...a, liability: true }); out.liabilities++ }
   if (p.target_allocation && typeof p.target_allocation === 'object') { setSetting('target_allocation', p.target_allocation); out.target_allocation = true }
   return out
 }
@@ -280,3 +319,19 @@ export function recordTrade(t) {
     [t.sleeve, t.symbol, t.exit_date, Number(t.invested_inr), Number(t.realised_inr), t.holding_days ?? null, t.source || 'refresh']))
 }
 export const deleteTrade = (id) => write((run) => run('DELETE FROM trades WHERE id = ?', [id]))
+
+// --- other assets and loans ----------------------------------------------------------
+/** Record what an asset (NPS, PPF, property...) or a loan is worth on a date. Entering it
+ * again later adds a newer entry, so earlier checkpoints keep the value that was true then. */
+export function saveAsset({ kind, name, value_inr, as_of_date, note, liability = false }) {
+  const kinds = liability ? LIABILITY_KINDS : ASSET_KINDS
+  if (!kinds.includes(kind)) fail(`${liability ? 'loan' : 'asset'} kind must be one of ${kinds.join(', ')}`)
+  if (!name) fail('name is required')
+  if (!isNum(value_inr) || Number(value_inr) < 0) fail('value_inr must be a number, positive; a loan is the amount you owe')
+  const d = as_of_date || new Date().toISOString().slice(0, 10)
+  if (!DATE.test(d)) fail('as_of_date must be YYYY-MM-DD')
+  write((run) => run(`INSERT INTO manual_assets (kind, name, as_of_date, value_inr, liability, note) VALUES (?,?,?,?,?,?)
+    ON CONFLICT(kind, name, as_of_date) DO UPDATE SET value_inr = excluded.value_inr, liability = excluded.liability, note = excluded.note`,
+  [kind, name, d, Number(value_inr), liability ? 1 : 0, note || null]))
+}
+export const deleteAsset = (kind, name) => write((run) => run('DELETE FROM manual_assets WHERE kind = ? AND name = ?', [kind, name]))

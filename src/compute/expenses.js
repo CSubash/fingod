@@ -34,7 +34,7 @@ export function periodOf(date, granularity) {
 
 const inRange = (t, from, to) => (!from || t.txn_date >= from) && (!to || t.txn_date <= to)
 
-function isCountable(t, labels) {
+export function isCountable(t, labels) {
   if (t.is_transfer || !Number(t.amount_inr)) return false
   if ((t.category_top || '') === INVESTMENT_CATEGORY) return false
   if ((t.category_id || '') === TRANSFER_CATEGORY_ID) return false

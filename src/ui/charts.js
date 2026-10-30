@@ -60,7 +60,7 @@ export function lineChart({ series, height = 280, yFormat = String, xFormat, zer
 
   const lines = live.map((s) => {
     const pts = s.points.map((p) => `${sx(p[0]).toFixed(1)},${sy(p[1]).toFixed(1)}`)
-    const path = s.points.length > 1 ? `<polyline points="${pts.join(' ')}" fill="none" stroke="${s.color}" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/>` : ''
+    const path = s.points.length > 1 ? `<polyline points="${pts.join(' ')}" fill="none" stroke="${s.color}" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"${s.dash ? ` stroke-dasharray="${s.dash}"` : ''}/>` : ''
     const dots = s.points.map((p) => `<circle cx="${sx(p[0]).toFixed(1)}" cy="${sy(p[1]).toFixed(1)}" r="${s.points.length === 1 ? 4 : 7}" fill="${s.points.length === 1 ? s.color : 'transparent'}"><title>${esc(s.label)} · ${esc(xFormat ? xFormat(p[0]) : '')} · ${esc(yFormat(p[1]))}</title></circle>`).join('')
     return path + dots
   }).join('')
