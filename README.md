@@ -67,6 +67,15 @@ modern browser.
   masquerades as ₹50k of market gain.
 - **Performance across assets.** Indian equity, mutual funds, US equity, gold, debt, Bitcoin and fixed
   deposits on one axis indexed to 100, time-weighted so money you add or take out never distorts it.
+- **XIRR and benchmarks.** Your money-weighted annual return per asset, and the portfolio set against the
+  Nifty 50 and the S&P 500 (in rupees), like for like.
+- **Savings rate and runway.** What you earned, spent and saved each month, and how many months of spending
+  your net worth would cover.
+- **Capital gains, optionally.** Give your agent a tradebook or a mutual fund statement and fingod matches
+  every lot first-in first-out: exact holding periods, short- versus long-term gains by financial year, and an
+  estimate of the tax (an estimate, not advice).
+- **Everything else you own.** NPS, PPF, property, physical gold and loans, typed in once and counted in your
+  total net worth.
 - **Allocation against targets.** Set a target per asset and see the drift and what to buy or sell.
 - **Realised profit.** Sales are detected by diffing checkpoints; you confirm the sale price and it is
   recorded, with win rate, holding period and gross wins versus gross losses.

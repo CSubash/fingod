@@ -1,12 +1,14 @@
 # Data format
 
-fingod's browser app imports two kinds of JSON file from the `data/` folder. Your coding agent writes
-them; you never have to. Both are **idempotent**: importing a file twice changes nothing, and a
+fingod's browser app imports a few kinds of JSON file from the `data/` folder. Your coding agent writes
+them; you never have to. All are **idempotent**: importing a file twice changes nothing, and a
 re-written file replaces what it replaced before.
 
 ```
 data/checkpoints/<YYYY-MM-DD>.json     a snapshot of everything you own on one date
 data/transactions/<anything>.json      Wallet expense records
+data/ledger/<anything>.json            every buy and sell, from a tradebook or a CAS (optional)
+data/standing/<anything>.json          rows that normally live in the app (optional)
 ```
 
 Any local static server works. `python3 -m http.server 8000 --bind 127.0.0.1` lists each folder as HTML and the app
@@ -80,6 +82,19 @@ Several connectors contribute to the same date. If `data/checkpoints/<today>.jso
 it and merge your sleeves in** rather than overwriting it: replacing a sleeve you own is correct;
 dropping one you don't is a bug.
 
+### Benchmarks (optional)
+
+A checkpoint may record the level of two indices, so the Investments page can set your portfolio against
+them. Both are optional and independent; leave one out rather than guess it.
+
+```jsonc
+"benchmarks": { "nifty50": 24500.35, "sp500": 560.12 }   // nifty50: the index level; sp500: SPY's price in USD
+```
+
+`sp500` is converted to rupees with that checkpoint's `usd_inr`, which is what an Indian investor earned. A
+comparison appears once two checkpoints carry the same benchmark, and every line starts at 100 on the latest
+date they all have in common. Past checkpoints can be backfilled by editing their files.
+
 ## Transactions
 
 ```jsonc
@@ -109,6 +124,41 @@ it already has: Wallet lets a record's date be edited after the fact.
 Spend charts are net of money that came back, and exclude transfers and Investments. The exact rules
 are in [ARCHITECTURE.md](ARCHITECTURE.md#expenses).
 
+## Trade ledger (optional)
+
+`data/ledger/<anything>.json` is every buy and sell your agent could read from a tradebook or a mutual
+fund statement. Checkpoints alone cannot date a purchase or price a sale; with a ledger the app can compute
+**exact XIRR**, the **cost and holding period of every lot**, and **capital gains** by financial year.
+Nothing needs it to run.
+
+```jsonc
+{
+  "ledger": [
+    {
+      "id": "1234567",               // optional: the broker's trade id. Without one, the row's own content is the key
+      "sleeve": "in_equity",         // same sleeves as a checkpoint
+      "symbol": "ACME", "isin": "INE000A01001", "name": "Acme Industries",
+      "trade_date": "2025-02-10",    // required, YYYY-MM-DD
+      "side": "buy",                 // buy | sell
+      "qty": 100, "price": 410.5,    // price per unit, in the instrument's own currency
+      "currency": "INR", "fx_rate": 1,   // a foreign trade needs the rate on the day, so cost is in rupees
+      "fees_inr": 25,                // optional: brokerage, STT, stamp duty. Added to a buy's cost, taken off a sale's proceeds
+      "source": "kite tradebook"
+    }
+  ]
+}
+```
+
+- **Match on ISIN**, as everywhere. A trade with no ISIN matches on sleeve and symbol.
+- A switch between funds is a `sell` of one and a `buy` of the other. A SIP instalment is a `buy`.
+- Lots are matched **first-in first-out**. A sale with no purchase behind it (the ledger starts after the
+  position was opened) is reported, never counted as pure profit.
+- The Realised page compares the ledger with the latest checkpoint's quantities and names every position
+  that disagrees. A bonus or a split changes quantity without a trade, and is not modelled: add the rows
+  yourself or accept the flag.
+- A sleeve's XIRR comes from the ledger only when it covers every holding in that sleeve and the
+  quantities agree; otherwise it falls back to the checkpoints.
+
 ## Config
 
 `data/config.json` is optional and **only your agent reads it**: a place to remember which Wallet
@@ -129,10 +179,16 @@ Import is idempotent: a deposit is matched on bank + principal + start date, a t
 {
   "fixed_deposits": [ { "bank": "Example Bank", "principal": 100000, "rate_pct": 6.5, "start_date": "2026-02-01", "maturity_date": "2027-02-01", "compounding": "quarterly" } ],
   "splitwise":      [ { "person": "Friend A", "amount_inr": 3000, "note": "" } ],                 // positive = they owe you
+  "assets":         [ { "kind": "nps", "name": "NPS Tier 1", "value_inr": 180000, "as_of_date": "2026-10-30" } ],   // nps | ppf | property | gold_physical | vehicle | other
+  "liabilities":    [ { "kind": "car_loan", "name": "Car loan", "value_inr": 128000, "as_of_date": "2026-10-30" } ],   // home_loan | car_loan | personal_loan | education_loan | other; the amount you owe, positive
   "trades":         [ { "sleeve": "in_equity", "symbol": "ACME", "exit_date": "2026-06-03", "invested_inr": 18000, "realised_inr": -2200, "holding_days": 60 } ],
   "target_allocation": { "in_equity": 27, "in_mf": 35, "us_equity": 10, "gold": 5, "btc": 5, "fd": 15, "debt": 2, "liquid": 1 }
 }
 ```
+
+**Assets and liabilities** are things with no MCP behind them. Each entry is dated: a new value for the
+same `kind` and `name` adds a newer entry, and a checkpoint reads the latest entry on or before its date, so
+history keeps what was true then. They move **total** net worth only; liquid is untouched.
 
 A checkpoint file may also carry its own `splitwise` balances. They are then stored as given instead of
 being snapshotted from the standing rows, which is how a history export keeps what was true on each date.
