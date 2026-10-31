@@ -27,6 +27,12 @@ export const trades = () => all('SELECT * FROM trades ORDER BY exit_date DESC')
 export const manualBtc = () => first("SELECT * FROM manual_holdings WHERE symbol = 'BTC' ORDER BY as_of_date DESC LIMIT 1")
   || first("SELECT h.qty, h.price, h.avg_cost, h.invested_inr FROM holdings h JOIN checkpoints c ON c.id = h.checkpoint_id WHERE h.symbol = 'BTC' ORDER BY c.as_of_date DESC LIMIT 1")
 
+/** Benchmark history as {key: [{date, level}]}, sorted by date. */
+export function benchmarkHistory() {
+  const out = {}
+  for (const r of all('SELECT key, as_of_date, level FROM benchmark_levels ORDER BY as_of_date')) (out[r.key] || (out[r.key] = [])).push({ date: r.as_of_date, level: r.level })
+  return out
+}
 export const ledgerRows = () => all('SELECT * FROM ledger ORDER BY trade_date')
 export const manualAssets = () => all('SELECT * FROM manual_assets ORDER BY liability, kind, name, as_of_date')
 
@@ -139,7 +145,8 @@ export function investmentsView(range = '3m') {
   const xirrTotal = xirr(allFlows, { minDays: MIN_XIRR_DAYS })
 
   const levels = {}
-  for (const k of Object.keys(BENCHMARKS)) levels[k] = inRange.map((c) => ({ as_of: c.as_of_date, level: levelAt(c, k) })).filter((p) => p.level)
+  const history = benchmarkHistory()
+  for (const k of Object.keys(BENCHMARKS)) levels[k] = inRange.map((c) => ({ as_of: c.as_of_date, level: levelAt(c, k, history) })).filter((p) => p.level)
   const compare = compareToBenchmarks(totalIndex, levels)
 
   const total = sleeves.reduce((a, s) => ({ value: a.value + s.value, invested: a.invested + s.invested, unrealised: a.unrealised + s.unrealised }), { value: 0, invested: 0, unrealised: 0 })

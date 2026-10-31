@@ -139,6 +139,7 @@ The schema is in `src/schema.js` (versioned migrations, applied on open):
 | `trades` | Realised profit you confirmed |
 | `ledger` | Every buy and sell from a tradebook or a CAS: the exact dates and prices a snapshot cannot see |
 | `manual_assets` | NPS, PPF, property and loans, several dated entries each |
+| `benchmark_levels` | Daily Nifty 50 and S&P 500 closes, so benchmarks load in one file rather than one level per checkpoint |
 | `settings` | Target allocation, your agent choice |
 | `imported_files` | Which files from `data/` were imported, so syncing twice is a no-op |
 
@@ -181,7 +182,7 @@ honest:
   annualising a few weeks is noise. Where a trade ledger covers a sleeve completely, XIRR uses the real
   trade dates instead and runs since the first trade.
 - **Benchmarks** (`compute/benchmark.js`): the time-weighted portfolio index against Nifty 50 and the
-  S&P 500 (SPY, converted to rupees at each checkpoint's rate), every line rebased to 100 at the latest
+  S&P 500 (a checkpoint reads the nearest close within 7 days, never a staler one) (SPY, converted to rupees at each checkpoint's rate), every line rebased to 100 at the latest
   date they all have in common. Both sides ignore flow, so the comparison is like for like.
 - **Savings and runway** (`compute/cashflow.js`): spend is exactly what the spend chart draws; income is
   money in that is not a transfer, an investment sale or a labelled refund; saved is income minus spend

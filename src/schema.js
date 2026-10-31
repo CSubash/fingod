@@ -1,6 +1,6 @@
 // The whole schema. SQLite, in the browser, persisted to IndexedDB.
 // Bump SCHEMA_VERSION and add a step to MIGRATIONS to change it later.
-export const SCHEMA_VERSION = 2
+export const SCHEMA_VERSION = 3
 
 export const MIGRATIONS = [
   // 1
@@ -156,6 +156,15 @@ export const MIGRATIONS = [
     liability   INTEGER NOT NULL DEFAULT 0,
     note        TEXT,
     PRIMARY KEY (kind, name, as_of_date)
+  );
+  `,
+  // 3: benchmark history, loaded in one go instead of one level per checkpoint
+  `
+  CREATE TABLE benchmark_levels (
+    key        TEXT NOT NULL,                     -- nifty50 | sp500
+    as_of_date TEXT NOT NULL,
+    level      REAL NOT NULL,                     -- nifty50: the index close; sp500: SPY's close in USD
+    PRIMARY KEY (key, as_of_date)
   );
   `,
 ]

@@ -155,10 +155,36 @@ export function ingestLedger(payload) {
   return { ledger: list.length }
 }
 
+/** Benchmark history in one file: {"benchmarks": {"nifty50": [{"date", "level"}, ...], "sp500": [...]}}.
+ * Idempotent on (benchmark, date), so a longer file later simply adds the new days. */
+export function ingestBenchmarks(payload) {
+  const b = payload && payload.benchmarks
+  if (!b || typeof b !== 'object' || Array.isArray(b)) fail('expected {"benchmarks": {"nifty50": [{"date", "level"}, ...]}}')
+  const problems = []
+  let n = 0
+  for (const [k, list] of Object.entries(b)) {
+    if (!BENCHMARKS[k]) { problems.push(`benchmarks.${k}: unknown benchmark, expected ${Object.keys(BENCHMARKS).join(' or ')}`); continue }
+    if (!Array.isArray(list)) { problems.push(`benchmarks.${k}: expected a list of {date, level}`); continue }
+    list.forEach((p, i) => {
+      if (!p || !DATE.test(p.date || '')) problems.push(`benchmarks.${k}[${i}]: date must be YYYY-MM-DD`)
+      else if (!isNum(p.level) || Number(p.level) <= 0) problems.push(`benchmarks.${k}[${i}] (${p.date}): level must be a positive number`)
+    })
+  }
+  if (problems.length) fail(problems.length > 6 ? `${problems.slice(0, 6).join('; ')}; and ${problems.length - 6} more` : problems.join('; '))
+  write((run) => {
+    for (const [k, list] of Object.entries(b)) for (const p of list) {
+      run('INSERT INTO benchmark_levels (key, as_of_date, level) VALUES (?,?,?) ON CONFLICT(key, as_of_date) DO UPDATE SET level = excluded.level', [k, p.date, Number(p.level)])
+      n++
+    }
+  })
+  return { benchmark_days: n }
+}
+
 /** A file's kind, from its contents. */
 export function classify(payload) {
   if (payload && Array.isArray(payload.holdings) && payload.as_of_date) return 'checkpoint'
   if (payload && !Array.isArray(payload) && Array.isArray(payload.ledger)) return 'ledger'
+  if (payload && !Array.isArray(payload) && !payload.as_of_date && payload.benchmarks && typeof payload.benchmarks === 'object' && Object.values(payload.benchmarks).every(Array.isArray)) return 'benchmarks'
   if (payload && !Array.isArray(payload) && ['fixed_deposits', 'splitwise', 'trades', 'target_allocation', 'assets', 'liabilities'].some((k) => k in payload)) return 'standing'
   if (payload && (Array.isArray(payload.transactions) || Array.isArray(payload))) return 'transactions'
   return null
@@ -169,13 +195,14 @@ export function ingestAny(payload) {
   if (kind === 'checkpoint') return { kind, ...ingestCheckpoint(payload) }
   if (kind === 'transactions') return { kind, ...ingestTransactions(payload) }
   if (kind === 'ledger') return { kind, ...ingestLedger(payload) }
+  if (kind === 'benchmarks') return { kind, ...ingestBenchmarks(payload) }
   if (kind === 'standing') return { kind, ...ingestStanding(payload) }
-  fail('not a fingod file: expected a checkpoint ({as_of_date, holdings}), {transactions}, {ledger} or standing rows')
+  fail('not a fingod file: expected a checkpoint ({as_of_date, holdings}), {transactions}, {ledger}, {benchmarks} or standing rows')
 }
 
 /** Pull in everything the agent has dropped into data/. Needs serve.py (or any
  * server exposing /data/manifest.json). Returns what changed. */
-const INBOX_DIRS = ['checkpoints', 'standing', 'transactions', 'ledger']
+const INBOX_DIRS = ['checkpoints', 'standing', 'transactions', 'ledger', 'benchmarks']
 
 /** serve.py lists data/ at /data/manifest.json. Any plain static server (python3 -m
  * http.server, which runs nothing from this repo) lists directories as HTML
@@ -217,7 +244,7 @@ export async function syncInbox() {
   if (!available) return { available: false, imported: [], errors: [] }
 
   const imported = [], errors = []
-  const files = listed.filter((f) => f.path.endsWith('.json') && /^(checkpoints|standing|transactions|ledger)\//.test(f.path)).sort((a, b) => a.path.localeCompare(b.path))
+  const files = listed.filter((f) => f.path.endsWith('.json') && /^(checkpoints|standing|transactions|ledger|benchmarks)\//.test(f.path)).sort((a, b) => a.path.localeCompare(b.path))
   for (const f of files) {
     const fingerprint = `${f.size}:${f.mtime}`
     const seen = first('SELECT fingerprint FROM imported_files WHERE path = ?', [f.path])

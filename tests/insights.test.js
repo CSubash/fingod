@@ -5,7 +5,7 @@ import { fifo, termOf, fyOf, summariseGains, reconcile, ledgerXirr } from '../sr
 import { cashflow } from '../src/compute/cashflow.js'
 import { compareToBenchmarks, levelAt } from '../src/compute/benchmark.js'
 import { computeNetWorth } from '../src/compute/networth.js'
-import { classify, ingestLedger, validateCheckpoint, IngestError } from '../src/ingest.js'
+import { classify, ingestLedger, ingestBenchmarks, validateCheckpoint, IngestError } from '../src/ingest.js'
 
 // --- XIRR -------------------------------------------------------------------
 test('xirr: a year to grow 100 into 110 is 10%', () => {
@@ -228,4 +228,29 @@ test('a checkpoint rejects an unknown or non-positive benchmark', () => {
   assert.doesNotThrow(() => validateCheckpoint(p))
   assert.throws(() => validateCheckpoint({ ...p, benchmarks: { dow: 40000 } }), /benchmarks.dow/)
   assert.throws(() => validateCheckpoint({ ...p, benchmarks: { nifty50: -1 } }), /nifty50/)
+})
+
+// --- benchmark history -------------------------------------------------------------
+test('benchmark history fills a checkpoint with the nearest earlier close, within a week', () => {
+  const history = { nifty50: [{ date: '2026-10-09', level: 23900 }, { date: '2026-10-16', level: 24000 }] }
+  assert.equal(levelAt({ as_of_date: '2026-10-18', benchmarks: {} }, 'nifty50', history), 24000) // a Sunday reads Friday's close
+  assert.equal(levelAt({ as_of_date: '2026-10-16', benchmarks: {} }, 'nifty50', history), 24000) // the same day counts
+  assert.equal(levelAt({ as_of_date: '2026-10-30', benchmarks: {} }, 'nifty50', history), null, 'two weeks old would be a guess')
+  assert.equal(levelAt({ as_of_date: '2026-10-05', benchmarks: {} }, 'nifty50', history), null, 'nothing earlier to read')
+})
+
+test('a level written in the checkpoint wins over the history, and a dollar history is converted', () => {
+  const history = { nifty50: [{ date: '2026-10-16', level: 24000 }], sp500: [{ date: '2026-10-16', level: 500 }] }
+  assert.equal(levelAt({ as_of_date: '2026-10-17', benchmarks: { nifty50: 25000 } }, 'nifty50', history), 25000)
+  assert.equal(levelAt({ as_of_date: '2026-10-17', benchmarks: {}, usd_inr: 90 }, 'sp500', history), 45000)
+})
+
+test('a benchmark history file is told apart from a checkpoint that carries one level', () => {
+  assert.equal(classify({ benchmarks: { nifty50: [{ date: '2026-10-16', level: 24000 }] } }), 'benchmarks')
+  assert.equal(classify({ as_of_date: '2026-10-16', holdings: [], benchmarks: { nifty50: 24000 } }), 'checkpoint')
+})
+
+test('a benchmark history file names every bad row', () => {
+  const bad = { benchmarks: { dow: [], nifty50: [{ date: '16/10/2026', level: 24000 }, { date: '2026-10-17', level: -1 }] } }
+  assert.throws(() => ingestBenchmarks(bad), (e) => e instanceof IngestError && /dow/.test(e.message) && /date must be/.test(e.message) && /level must be/.test(e.message))
 })

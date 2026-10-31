@@ -272,19 +272,33 @@ previous checkpoint (the cost only changes if the quantity does).
 
 ---
 
-## 4b. Benchmarks — every checkpoint
+## 4b. Benchmarks — daily history, in one file
 
-Two numbers let the Investments page set the portfolio against the market. Both are optional: **omit one you
-cannot read cleanly rather than guess it**, and never write a number you did not just read.
+The Investments page sets the portfolio against the Nifty 50 and the S&P 500. Load them as **history**, not one
+number per checkpoint, so a backfill is a single call each. Never write a number you did not just read, and
+leave a benchmark out rather than guess it.
 
-- `nifty50` — the Nifty 50 index level. Kite `get_ltp` on `NSE:NIFTY 50`.
-- `sp500` — **SPY's price in USD** (an ETF tracking the S&P 500, so no index feed is needed). INDmoney
-  `get_us_stocks_details` for `SPY`, `live_price`.
+- **Nifty 50.** INDmoney `lookup_ind_keys` for `NIFTY 50` (`IN_STOCKS`) gives `INDI00012`; then
+  `get_indian_stocks_ohlc(ind_key, interval: "1day", lookback: "1y")`, up to 250 daily candles. Or Kite
+  `get_historical_data` with instrument token `256265` (`NSE:NIFTY 50`), `interval: "day"`. Take each candle's
+  `close`, and the date from `datetime_ist` (its date part).
+- **S&P 500 (SPY).** INDmoney `get_us_stocks_ohlc(symbols: ["SPY"], duration)` where `duration` is the smallest of
+  `1w 1m 3m 6m 1y 3y 5y 10y` that reaches back past the **earliest checkpoint** by a week. Take each `close`. SPY
+  stands in for the index, so no index feed is needed; the app converts it to rupees. If `candles_total` is
+  larger than the candles returned, the series was sampled and may have gaps over a week: choose a shorter
+  `duration` or say so.
+- **Official closes only.** Drop a candle for a session still in progress, and one whose volume is `0`; it may be
+  partial. A checkpoint then reads the previous close, which the app allows within seven days.
 
-Write them as `"benchmarks": {"nifty50": 24500.35, "sp500": 560.12}` in the checkpoint. The app converts the
-S&P figure to rupees with that checkpoint's `usd_inr`. If asked to backfill past checkpoints, use closing
-levels for each checkpoint's date (Kite `get_historical_data`, INDmoney `get_us_stocks_ohlc`) and edit those
-files; say plainly if a date could not be filled.
+Write `data/benchmarks/history-<YYYY-MM-DD>.json` as in `docs/DATA-FORMAT.md` and check it with
+`python3 -m json.tool`. Run this on every refresh: re-sending is idempotent, so the file only has to reach
+back to the last checkpoint, and a first run fills the whole history. A checkpoint can still carry its own
+`benchmarks` levels, which win over the history, but the history file is the way to do it.
+
+No public API is needed. The open options are unofficial (NSE site scrapers, Yahoo's chart endpoint, Stooq)
+and can break or throttle; the two brokers are already connected and read-only.
+
+---
 
 ## 4c. Trade ledger — history that a snapshot cannot see (offer, don't assume)
 
@@ -325,7 +339,6 @@ Write `data/checkpoints/<YYYY-MM-DD>.json` as in `docs/DATA-FORMAT.md`:
 
 ```jsonc
 { "as_of_date": "YYYY-MM-DD", "usd_inr": 90.12,
-  "benchmarks": {"nifty50": 24500.35, "sp500": 560.12},
   "sources": {"wallet":"ok","kite":"ok","groww":"ok","indmoney":"ok","manual":"ok"},
   "holdings": [ {"sleeve":"…","symbol":"…","isin":"…","name":"…","qty":0,"price":0,"currency":"INR","fx_rate":1} ],
   "balances": [ {"kind":"cash|credit_card|epf","ref":"…","amount_inr":0} ] }

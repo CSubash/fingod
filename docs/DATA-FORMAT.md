@@ -8,6 +8,7 @@ re-written file replaces what it replaced before.
 data/checkpoints/<YYYY-MM-DD>.json     a snapshot of everything you own on one date
 data/transactions/<anything>.json      Wallet expense records
 data/ledger/<anything>.json            every buy and sell, from a tradebook or a CAS (optional)
+data/benchmarks/<anything>.json        daily Nifty 50 and S&P 500 history, loaded in one go (optional)
 data/standing/<anything>.json          rows that normally live in the app (optional)
 ```
 
@@ -84,16 +85,32 @@ dropping one you don't is a bug.
 
 ### Benchmarks (optional)
 
-A checkpoint may record the level of two indices, so the Investments page can set your portfolio against
-them. Both are optional and independent; leave one out rather than guess it.
+The Investments page can set your portfolio against the Nifty 50 and the S&P 500. There are two ways to
+supply them, and both are optional.
+
+**History in one file (preferred).** `data/benchmarks/<anything>.json` carries daily closes for as many days as
+you like, so a backfill is one file instead of an edit per checkpoint:
+
+```jsonc
+{ "benchmarks": {
+    "nifty50": [ { "date": "2026-10-28", "level": 22698.85 }, { "date": "2026-10-29", "level": 22936.75 } ],  // the index close
+    "sp500":   [ { "date": "2026-10-28", "level": 772.31 },   { "date": "2026-10-29", "level": 769.36 } ]     // SPY's close in USD
+} }
+```
+
+A checkpoint reads the close on its own date, or the nearest earlier one within **7 days** (a Sunday checkpoint
+reads Friday's close). Further back than that it shows nothing rather than guess. Re-sending is idempotent on
+`(benchmark, date)`, so a later, longer file just adds the new days.
+
+**One level per checkpoint.** A checkpoint may also carry its own, which wins over the history:
 
 ```jsonc
 "benchmarks": { "nifty50": 24500.35, "sp500": 560.12 }   // nifty50: the index level; sp500: SPY's price in USD
 ```
 
-`sp500` is converted to rupees with that checkpoint's `usd_inr`, which is what an Indian investor earned. A
-comparison appears once two checkpoints carry the same benchmark, and every line starts at 100 on the latest
-date they all have in common. Past checkpoints can be backfilled by editing their files.
+`sp500` is SPY's price rather than an index level, and is converted to rupees with that checkpoint's `usd_inr`,
+which is what an Indian investor earned. A comparison appears once two checkpoints can see the same
+benchmark, and every line starts at 100 on the latest date they all have in common.
 
 ## Transactions
 
