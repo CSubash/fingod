@@ -31,27 +31,21 @@ export function levelAt(checkpoint, key, history = {}) {
   return fx > 0 ? v * fx : null
 }
 
-/** totalIndex: [{as_of, v}] (any base). levels: {key: [{as_of, level}]}.
- * Everything is rebased to 100 on the latest date every series has in common at its
- * start, so the lines begin together. Returns null when there is nothing to compare. */
+/** totalIndex: [{as_of, v}] starting at 100 on the first date of the range. levels: {key: [{as_of, level}]}.
+ * Every line is drawn from that same first date, so a benchmark is rebased to 100 there; one with no close on
+ * that date cannot be drawn honestly (it would start mid-chart at 100), so it is listed in `missing` instead.
+ * Returns null when there is no benchmark data at all. */
 export function compareToBenchmarks(totalIndex, levels) {
-  const keys = Object.keys(levels).filter((k) => levels[k].length >= 2)
+  const keys = Object.keys(levels).filter((k) => levels[k].length)
   if (!keys.length || totalIndex.length < 2) return null
-  const since = keys.map((k) => levels[k][0].as_of).sort().at(-1)
-  const rebase = (pts, get) => {
-    const base = pts.find((p) => p.as_of === since)
-    if (!base || !get(base)) return null
-    const out = pts.filter((p) => p.as_of >= since).map((p) => ({ as_of: p.as_of, v: (get(p) / get(base)) * 100 }))
-    return out.length >= 2 ? out : null
-  }
-  const series = []
-  const portfolio = rebase(totalIndex, (p) => p.v)
-  if (!portfolio) return null
-  series.push({ key: 'portfolio', label: 'Your portfolio', points: portfolio })
+  const start = totalIndex[0].as_of
+  const series = [{ key: 'portfolio', label: 'Your portfolio', points: totalIndex }]
+  const missing = []
   for (const k of keys) {
-    const pts = rebase(levels[k], (p) => p.level)
-    if (pts) series.push({ key: k, label: BENCHMARKS[k].label, points: pts })
+    const base = levels[k].find((p) => p.as_of === start)
+    const pts = base ? levels[k].filter((p) => p.as_of >= start).map((p) => ({ as_of: p.as_of, v: (p.level / base.level) * 100 })) : []
+    if (pts.length >= 2) series.push({ key: k, label: BENCHMARKS[k].label, points: pts })
+    else missing.push({ key: k, label: BENCHMARKS[k].label })
   }
-  if (series.length < 2) return null
-  return { since, series: series.map((s) => ({ ...s, change_pct: money(s.points.at(-1).v - 100) })) }
+  return { since: start, series: series.map((s) => ({ ...s, change_pct: money(s.points.at(-1).v - 100) })), missing }
 }

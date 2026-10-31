@@ -193,15 +193,24 @@ test('benchmarks: a dollar index is converted at the checkpoint rate, and a miss
   assert.equal(levelAt({ benchmarks: { sp500: 500 } }, 'sp500'), null)
 })
 
-test('benchmarks: every line is rebased to 100 where all of them have begun', () => {
+test('benchmarks: every line starts at 100 on the first date of the range', () => {
   const total = [{ as_of: '2026-01-01', v: 100 }, { as_of: '2026-02-01', v: 105 }, { as_of: '2026-03-01', v: 126 }]
-  const c = compareToBenchmarks(total, { nifty50: [{ as_of: '2026-02-01', level: 20000 }, { as_of: '2026-03-01', level: 21000 }] })
-  assert.equal(c.since, '2026-02-01')
+  const c = compareToBenchmarks(total, { nifty50: [{ as_of: '2026-01-01', level: 20000 }, { as_of: '2026-02-01', level: 20500 }, { as_of: '2026-03-01', level: 21000 }] })
+  assert.equal(c.since, '2026-01-01')
   const mine = c.series.find((s) => s.key === 'portfolio'), nifty = c.series.find((s) => s.key === 'nifty50')
   assert.equal(mine.points[0].v, 100)
-  assert.equal(mine.change_pct, 20)
+  assert.equal(nifty.points[0].v, 100)
+  assert.equal(mine.change_pct, 26)
   assert.equal(nifty.change_pct, 5)
+  assert.deepEqual(c.missing, [])
   assert.equal(compareToBenchmarks(total, {}), null)
+})
+
+test('benchmarks: one with no close on the first date is listed, not drawn from the middle of the chart', () => {
+  const total = [{ as_of: '2026-01-01', v: 100 }, { as_of: '2026-02-01', v: 105 }, { as_of: '2026-03-01', v: 126 }]
+  const c = compareToBenchmarks(total, { nifty50: [{ as_of: '2026-02-01', level: 20500 }, { as_of: '2026-03-01', level: 21000 }] })
+  assert.deepEqual(c.series.map((s) => s.key), ['portfolio'])
+  assert.deepEqual(c.missing.map((m) => m.key), ['nifty50'])
 })
 
 // --- other assets and loans -------------------------------------------------------
