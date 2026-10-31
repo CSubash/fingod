@@ -83,8 +83,9 @@ Each holding belongs to exactly one sleeve:
 | `us_equity` | US stocks | INDmoney |
 | `gold` | Gold ETFs | Kite (classified by ISIN) |
 | `debt` | Overnight and liquid ETFs | Kite (classified by ISIN) |
-| `btc` | Bitcoin | manual |
+| `btc` | Crypto (labelled so; the key predates it) | Coinbase, Binance (`<COIN>.<exchange>`), and manual |
 | `fd` | Fixed deposits | standing rows, valued by formula |
+| `ppf` | PPF | standing rows, valued by formula |
 
 ## Source ownership
 
@@ -96,7 +97,9 @@ Wallet    → expenses, cash, credit cards      (its FD accounts are excluded)
 Kite      → Indian equity, Indian mutual funds, idle broker cash
 Groww     → Indian equity held at Groww (merged with Kite by ISIN; mutual funds not supported yet)
 INDmoney  → US equity, EPF, US wallet cash    (everything else discarded)
-Manual    → Bitcoin, fixed deposits, Splitwise
+Coinbase  → crypto held at Coinbase           (BTC.coinbase, ETH.coinbase, …)
+Binance   → crypto held at Binance            (BTC.binance, …)
+Manual    → Bitcoin held elsewhere, fixed deposits, PPF, Splitwise
 ```
 
 See [MCP-SHAPES.md](MCP-SHAPES.md) for why each source owns what it owns.
@@ -105,7 +108,7 @@ See [MCP-SHAPES.md](MCP-SHAPES.md) for why each source owns what it owns.
 
 ```
 NW_liquid = cash + IN equity + IN MF + US equity + BTC + FD principal − credit card outstanding
-NW_total  = NW_liquid + EPF + FD accrued interest + Splitwise receivable
+NW_total  = NW_liquid + EPF + PPF + FD accrued interest + Splitwise receivable
 ```
 
 Liquid is what you could act on. Total is what you are worth on paper. Both are computed at every
@@ -120,6 +123,10 @@ Some things change rarely, so they are entered once in the app and valued at eve
   closing date rather than deleting it, or history silently rewrites itself.
 - **Splitwise** keeps only the bottom line per person (positive means they owe you), snapshotted into
   each checkpoint so history keeps what was true at the time.
+- **PPF** stores each deposit with its date and the government's rate for each financial-year quarter.
+  Interest is computed monthly on the balance as of the 5th and credited every 31 March (`src/compute/ppf.js`),
+  so like a deposit it is priced correctly at any date. A quarter with no rate uses the latest earlier one, and
+  the app asks for the new quarter's rate with a dismissable banner.
 - **Bitcoin** is a hand-entered quantity and value, carried forward into later checkpoints.
 
 ## Data model

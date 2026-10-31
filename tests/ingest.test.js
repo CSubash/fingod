@@ -67,3 +67,7 @@ test('a stock held at two brokers can carry its per-broker split; the app ignore
   p.holdings[0].brokers = { kite: { qty: 6, invested_inr: 600 }, groww: { qty: 4, invested_inr: 400 } }
   assert.doesNotThrow(() => validateCheckpoint(p))
 })
+
+test('a standing file carrying only PPF is recognised as standing rows', () => {
+  assert.equal(classify({ ppf: { deposits: [{ date: '2026-04-02', amount_inr: 150000 }], rates: [{ quarter_start: '2026-10-01', rate_pct: 7.1 }] } }), 'standing')
+})

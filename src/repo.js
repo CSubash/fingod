@@ -2,7 +2,8 @@
 import { all, first, getSetting } from './db.js'
 import { computeNetWorth } from './compute/networth.js'
 import { allocate, DEFAULT_TARGET } from './compute/allocation.js'
-import { returns, fixedDepositReturns } from './compute/returns.js'
+import { returns, fixedDepositReturns, ppfReturns } from './compute/returns.js'
+import { quarterStart } from './compute/ppf.js'
 import { findDisposals } from './compute/realised.js'
 import { money } from './compute/num.js'
 import { diff, bySleeve } from './compute/qtydiff.js'
@@ -16,9 +17,23 @@ export const hasData = () => !!first('SELECT 1 AS x FROM checkpoints LIMIT 1')
 export const holdingsOf = (id) => all('SELECT * FROM holdings WHERE checkpoint_id = ?', [id])
 export const balancesOf = (id) => all('SELECT * FROM balances WHERE checkpoint_id = ?', [id])
 export const fixedDeposits = () => all('SELECT * FROM fixed_deposits ORDER BY start_date')
+export const ppfDeposits = () => all('SELECT * FROM ppf_deposits ORDER BY deposit_date, id')
+export const ppfRates = () => all('SELECT * FROM ppf_rates ORDER BY quarter_start')
+const ppfState = () => ({ deposits: ppfDeposits(), rates: ppfRates() })
 export const splitwise = () => all('SELECT * FROM splitwise_balances ORDER BY ABS(amount_inr) DESC')
 export const targets = () => getSetting('target_allocation', DEFAULT_TARGET)
 export const trades = () => all('SELECT * FROM trades ORDER BY exit_date DESC')
+/** The quarter whose PPF rate the user still has to enter, or null: only once they
+ * have a PPF, only while today's quarter has no rate, and not after they dismissed it. */
+export function ppfRateDue(today = new Date().toISOString().slice(0, 10)) {
+  if (!first('SELECT 1 AS x FROM ppf_deposits LIMIT 1')) return null
+  const qs = quarterStart(today)
+  if (first('SELECT 1 AS x FROM ppf_rates WHERE quarter_start = ?', [qs])) return null
+  if (getSetting('ppf_rate_dismissed', null) === qs) return null
+  const last = first('SELECT rate_pct FROM ppf_rates WHERE quarter_start < ? ORDER BY quarter_start DESC LIMIT 1', [qs])
+  return { quarter_start: qs, last_rate: last ? last.rate_pct : null }
+}
+
 /** The Bitcoin position: the hand-entered one, else the latest checkpoint's (an agent may have written it). */
 export const manualBtc = () => first("SELECT * FROM manual_holdings WHERE symbol = 'BTC' ORDER BY as_of_date DESC LIMIT 1")
   || first("SELECT h.qty, h.price, h.avg_cost, h.invested_inr FROM holdings h JOIN checkpoints c ON c.id = h.checkpoint_id WHERE h.symbol = 'BTC' ORDER BY c.as_of_date DESC LIMIT 1")
@@ -26,11 +41,11 @@ export const manualBtc = () => first("SELECT * FROM manual_holdings WHERE symbol
 /** One networth point per checkpoint, oldest first. */
 export function networthSeries() {
   const cps = checkpoints()
-  const fds = fixedDeposits()
+  const fds = fixedDeposits(), ppf = ppfState()
   const hs = new Map(), bs = new Map()
   for (const h of all('SELECT * FROM holdings')) (hs.get(h.checkpoint_id) || hs.set(h.checkpoint_id, []).get(h.checkpoint_id)).push(h)
   for (const b of all('SELECT * FROM balances')) (bs.get(b.checkpoint_id) || bs.set(b.checkpoint_id, []).get(b.checkpoint_id)).push(b)
-  return cps.map((c) => ({ ...computeNetWorth({ asOf: c.as_of_date, holdings: hs.get(c.id) || [], balances: bs.get(c.id) || [], fixedDeposits: fds }), sources: c.sources }))
+  return cps.map((c) => ({ ...computeNetWorth({ asOf: c.as_of_date, holdings: hs.get(c.id) || [], balances: bs.get(c.id) || [], fixedDeposits: fds, ppf }), sources: c.sources }))
 }
 
 export function allocationNow() {
@@ -44,7 +59,7 @@ export const RANGE_IDS = Object.keys(RANGES)
 
 // Which source owns which sleeve: a stale source is excluded from that period's
 // attribution rather than booked as a move to zero.
-const SOURCE_OF = { in_equity: ['kite', 'groww'], in_mf: ['kite'], gold: ['kite', 'groww'], debt: ['kite', 'groww'], us_equity: ['indmoney'], btc: ['manual'] }
+const SOURCE_OF = { in_equity: ['kite', 'groww'], in_mf: ['kite'], gold: ['kite', 'groww'], debt: ['kite', 'groww'], us_equity: ['indmoney'], btc: ['manual', 'coinbase', 'binance'] }
 
 /** Sleeve returns and attribution between the latest checkpoint and the one a
  * range ago, plus a series for the indexed chart. */
@@ -73,7 +88,9 @@ export function investmentsView(range = '3m') {
   for (const s of r.sleeves) if (stale(s.sleeve)) Object.assign(s, { market: null, flow: null, fx: null, delta: null, stale: true })
 
   const fdSleeve = fds.length ? fixedDepositReturns(fds, latest.as_of_date, compared && compared.as_of_date) : null
-  const sleeves = fdSleeve && fdSleeve.holdings.length ? [...r.sleeves, fdSleeve].sort((a, b) => b.value - a.value) : r.sleeves
+  const ppf = ppfState()
+  const ppfSleeve = ppf.deposits.length ? ppfReturns(ppf.deposits, ppf.rates, latest.as_of_date, compared && compared.as_of_date) : null
+  const sleeves = [...r.sleeves, ...[fdSleeve, ppfSleeve].filter((s) => s && s.holdings.length)].sort((a, b) => b.value - a.value)
 
   const inRange = cps.filter((c) => !compared || c.as_of_date >= compared.as_of_date)
   const series = inRange.map((c) => {
@@ -81,6 +98,7 @@ export function investmentsView(range = '3m') {
     for (const h of all('SELECT sleeve, SUM(value_inr) AS v FROM holdings WHERE checkpoint_id = ? GROUP BY sleeve', [c.id])) values[h.sleeve] = h.v
     const fd = fds.reduce((s, f) => s + (new Date(f.start_date) <= new Date(c.as_of_date) && !(f.closed_at && f.closed_at <= c.as_of_date) ? f.principal : 0), 0)
     if (fd) values.fd = money(fdSleeve ? fixedDepositReturns(fds, c.as_of_date, null).value : fd)
+    if (ppfSleeve) { const v = ppfReturns(ppf.deposits, ppf.rates, c.as_of_date, null).value; if (v) values.ppf = v }
     return { as_of: c.as_of_date, values }
   })
 
@@ -90,7 +108,7 @@ export function investmentsView(range = '3m') {
   const chain = inRange.map((c) => ({ c, h: holdingsOf(c.id) }))
   for (let i = 0; i < chain.length; i++) {
     const asOf = chain[i].c.as_of_date
-    if (i === 0) { for (const s of new Set(chain[0].h.map((x) => x.sleeve))) index[s] = [{ as_of: asOf, v: 100 }]; if (fds.length) index.fd = [{ as_of: asOf, v: 100 }]; continue }
+    if (i === 0) { for (const s of new Set(chain[0].h.map((x) => x.sleeve))) index[s] = [{ as_of: asOf, v: 100 }]; if (fds.length) index.fd = [{ as_of: asOf, v: 100 }]; if (ppfSleeve) index.ppf = [{ as_of: asOf, v: 100 }]; continue }
     for (const s of bySleeve(diff(chain[i - 1].h, chain[i].h))) {
       if (!index[s.sleeve]) { index[s.sleeve] = [{ as_of: asOf, v: 100 }]; continue }
       const last = index[s.sleeve].at(-1).v
@@ -100,6 +118,11 @@ export function investmentsView(range = '3m') {
       const f = fixedDepositReturns(fds, asOf, chain[i - 1].c.as_of_date)
       const prev = fixedDepositReturns(fds, chain[i - 1].c.as_of_date, null).value
       index.fd.push({ as_of: asOf, v: prev ? index.fd.at(-1).v * (1 + f.market / prev) : index.fd.at(-1).v })
+    }
+    if (index.ppf) { // interest only: a deposit is flow and stays out of the index
+      const f = ppfReturns(ppf.deposits, ppf.rates, asOf, chain[i - 1].c.as_of_date)
+      const prev = ppfReturns(ppf.deposits, ppf.rates, chain[i - 1].c.as_of_date, null).value
+      index.ppf.push({ as_of: asOf, v: prev ? index.ppf.at(-1).v * (1 + f.market / prev) : index.ppf.at(-1).v })
     }
   }
 
@@ -141,7 +164,10 @@ export function connectorStatus() {
     indmoney: { ok: has('us_equity'), us: hold.filter((h) => h.sleeve === 'us_equity').length, epf: bal.filter((b) => b.kind === 'epf').length },
     epf: { ok: bal.some((b) => b.kind === 'epf') },
     btc: { ok: has('btc') || !!manualBtc() },
+    coinbase: { ok: hold.some((h) => h.sleeve === 'btc' && h.symbol.endsWith('.coinbase')) },
+    binance: { ok: hold.some((h) => h.sleeve === 'btc' && h.symbol.endsWith('.binance')) },
     fd: { ok: fixedDeposits().length > 0 },
+    ppf: { ok: ppfDeposits().length > 0 },
     splitwise: { ok: splitwise().length > 0 },
     checkpoint: latest ? latest.as_of_date : null,
   }

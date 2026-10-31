@@ -23,11 +23,11 @@ A checkpoint is an immutable snapshot. Send **quantity and price, never a total*
   "as_of_date": "2026-10-29",          // required, YYYY-MM-DD; one file per date
   "usd_inr": 90.12,                    // required if any holding is in USD without its own fx_rate
   "sources": {                         // which sources were read: "ok" | "stale"
-    "wallet": "ok", "kite": "ok", "groww": "ok", "indmoney": "ok", "manual": "ok"
+    "wallet": "ok", "kite": "ok", "groww": "ok", "indmoney": "ok", "coinbase": "ok", "binance": "ok", "manual": "ok"
   },
   "holdings": [
     {
-      "sleeve": "in_equity",           // in_equity | in_mf | us_equity | gold | debt | btc
+      "sleeve": "in_equity",           // in_equity | in_mf | us_equity | gold | debt | btc (all crypto)
       "symbol": "ACME",                // required; unique within a sleeve
       "isin": "INE000A01001",          // strongly recommended: holdings are matched across dates on ISIN
       "name": "Acme Industries",
@@ -59,12 +59,14 @@ Rules the app enforces (and reports by name when broken):
   the sign before writing.
 - `splitwise` balances are **never** sent in a checkpoint. They are standing rows entered in the app and
   snapshotted into each checkpoint, so history keeps what was true at the time.
-- Fixed deposits are standing rows too, entered in the app and valued by formula.
+- Fixed deposits and PPF are standing rows too, entered in the app and valued by formula.
+- The `btc` sleeve holds all crypto (the app labels it **Crypto**). Coins read from an exchange carry it in the
+  symbol, `<COIN>.<exchange>` (`ETH.binance`, `BTC.coinbase`), so the same coin at two places never collides.
 - If a source failed, carry that sleeve forward **verbatim** from the previous checkpoint and set
   `sources.<name>: "stale"`. A stale sleeve is excluded from that period's attribution instead of being
   booked as a move to zero.
-- If a hand-entered Bitcoin position exists in the app and the file has no `btc` holding, the app carries
-  it forward into the checkpoint.
+- If a hand-entered Bitcoin position exists in the app and the file has no holding with its symbol (`BTC`), the
+  app carries it forward into the checkpoint. Exchange coins (`BTC.coinbase`) don't count as it.
 
 ### One stock at two brokers
 
@@ -120,19 +122,28 @@ accounts you said are cash, credit cards, or to ignore, so it doesn't ask again.
 
 ## Standing rows (optional)
 
-`data/standing/<anything>.json` carries the rows that normally live in the app: fixed deposits, Splitwise
+`data/standing/<anything>.json` carries the rows that normally live in the app: fixed deposits, PPF, Splitwise
 balances, confirmed trades and the target allocation. It is the way to **bring existing history in**.
-Import is idempotent: a deposit is matched on bank + principal + start date, a trade on
-`(sleeve, symbol, exit_date, invested_inr)`, a person by name.
+Import is idempotent: a deposit is matched on bank + principal + start date, a PPF deposit on date + amount, a
+PPF rate on its quarter, a trade on `(sleeve, symbol, exit_date, invested_inr)`, a person by name.
 
 ```jsonc
 {
   "fixed_deposits": [ { "bank": "Example Bank", "principal": 100000, "rate_pct": 6.5, "start_date": "2026-02-01", "maturity_date": "2027-02-01", "compounding": "quarterly" } ],
+  "ppf": {
+    "deposits": [ { "date": "2024-04-03", "amount_inr": 150000, "note": "" } ],                 // any number, any dates
+    "rates":    [ { "quarter_start": "2026-10-01", "rate_pct": 7.1 } ]                          // one per FY quarter
+  },
   "splitwise":      [ { "person": "Friend A", "amount_inr": 3000, "note": "" } ],                 // positive = they owe you
   "trades":         [ { "sleeve": "in_equity", "symbol": "ACME", "exit_date": "2026-06-03", "invested_inr": 18000, "realised_inr": -2200, "holding_days": 60 } ],
   "target_allocation": { "in_equity": 27, "in_mf": 35, "us_equity": 10, "gold": 5, "btc": 5, "fd": 15, "debt": 2, "liquid": 1 }
 }
 ```
+
+**PPF.** `quarter_start` is the first day of a financial-year quarter: `YYYY-04-01` (Q1, Apr–Jun),
+`YYYY-07-01` (Q2, Jul–Sept), `YYYY-10-01` (Q3, Oct–Dec) or `YYYY-01-01` (Q4, Jan–Mar). Interest is computed
+monthly on the balance as of the 5th and credited each 31 March. A quarter with no rate uses the latest earlier
+one, and the app says which quarters those are. PPF counts in total net worth, not liquid.
 
 A checkpoint file may also carry its own `splitwise` balances. They are then stored as given instead of
 being snapshotted from the standing rows, which is how a history export keeps what was true on each date.

@@ -25,7 +25,7 @@ export const monthLabel = (d) => { const [y, m] = d.split('-'); return `${MONTHS
 
 export const SLEEVE_LABEL = {
   in_equity: 'IN Equity', in_mf: 'IN Mutual Funds', us_equity: 'US Equity', gold: 'Gold', debt: 'Debt',
-  btc: 'Bitcoin', fd: 'Fixed Deposits', epf: 'EPF', liquid: 'Bank balances', cash: 'Bank balances', insurance: 'Insurance',
+  btc: 'Crypto', fd: 'Fixed Deposits', epf: 'EPF', ppf: 'PPF', liquid: 'Bank balances', cash: 'Bank balances', insurance: 'Insurance',
 }
 export const sleeveLabel = (s) => SLEEVE_LABEL[s] || s
 export const sleeveColor = (s) => `var(--sleeve-${s === 'liquid' ? 'liquid' : s})`

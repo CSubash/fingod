@@ -9,7 +9,7 @@ ES modules, SQLite compiled to WebAssembly (`sql.js`, vendored), no backend, no 
 build step, no npm dependencies. You clone it and run Python's built-in static server.
 
 The browser cannot speak MCP, so **you** are the connector. The `/refresh` skill
-(`.claude/skills/refresh/SKILL.md`) reads Wallet, Zerodha Kite and INDmoney over MCP and writes JSON files
+(`.claude/skills/refresh/SKILL.md`) reads Wallet, Zerodha Kite, Groww, INDmoney, Coinbase and Binance over MCP and writes JSON files
 into `data/`; the app imports them automatically. Read [docs/DATA-FORMAT.md](docs/DATA-FORMAT.md) before
 writing any, and [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) before changing `src/compute/`.
 
@@ -18,8 +18,9 @@ terminal (selectable questions, then a submit step), and the browser only shows 
 
 ## Hard rules
 
-1. **Never place, modify or cancel an order.** The Kite MCP server exposes `place_order`, `modify_order`,
-   `cancel_order` and GTT tools. This project only reads. If asked to trade, tell the user to use their
+1. **Never place, modify or cancel an order, or move money.** The Kite MCP server exposes `place_order`,
+   `modify_order`, `cancel_order` and GTT tools; Coinbase's exposes orders, transfers and conversions; Binance's
+   exposes orders, conversions and wallet transfers. This project only reads. If asked to trade, tell the user to use their
    broker directly.
 2. **Never commit personal financial data.** That means real holdings, balances, transactions, account
    or employer names, tokens, exports, and screenshots of a real dashboard. Everything in `data/` except
@@ -72,7 +73,8 @@ landing/             the static landing page (deployed separately)
 - Pages build HTML strings and **escape every interpolated value** with `esc()` from `ui/format.js`.
 - Colours come from CSS variables in `src/styles/tokens.css`, consumed by role, never as raw hex.
 - Source ownership is exclusive: Wallet owns cash, cards and expenses; Kite owns Indian equity and funds,
-  Groww owns Indian equity held there (merged with Kite by ISIN); INDmoney owns US equity and EPF; manual input owns Bitcoin, fixed deposits and Splitwise. Discard the
+  Groww owns Indian equity held there (merged with Kite by ISIN); INDmoney owns US equity and EPF; Coinbase and Binance own the crypto held there (`<COIN>.<exchange>` in the
+  `btc` sleeve, labelled Crypto); manual input owns Bitcoin held elsewhere, fixed deposits, PPF and Splitwise. Discard the
   overlap rather than reconciling it.
 - A source that fails is carried forward and marked `stale`, never written as zero.
 - Credit cards are stored as a positive outstanding balance; Wallet reports them negative.
@@ -87,7 +89,7 @@ landing/             the static landing page (deployed separately)
 - `.claude/skills/refresh/SKILL.md` and `docs/MCP-SHAPES.md` describe the same mappings. Change them
   together.
 - The MCP servers are declared once per agent, and the four must list the same servers and the same
-  disabled Kite order tools: `.mcp.json` (Claude Code, with deny rules in `.claude/settings.json`),
+  disabled order and transfer tools (Kite, Coinbase, Binance): `.mcp.json` (Claude Code, with deny rules in `.claude/settings.json`),
   `.codex/config.toml` (Codex CLI), `.gemini/settings.json` (Gemini CLI) and `.pi/mcp.json` (Pi, as
   `toolExposure: hidden`; `.pi/settings.json` points Pi at `.claude/skills`). `AGENTS.md` is the short
   guidance Codex, Gemini and Pi read; `CLAUDE.md` is the full version. The agent choices on the

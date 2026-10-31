@@ -1,6 +1,6 @@
 // The whole schema. SQLite, in the browser, persisted to IndexedDB.
 // Bump SCHEMA_VERSION and add a step to MIGRATIONS to change it later.
-export const SCHEMA_VERSION = 1
+export const SCHEMA_VERSION = 2
 
 export const MIGRATIONS = [
   // 1
@@ -120,6 +120,20 @@ export const MIGRATIONS = [
     path        TEXT PRIMARY KEY,
     fingerprint TEXT NOT NULL,                    -- size:mtime, re-imported when it changes
     imported_at TEXT NOT NULL
+  );
+  `,
+  // 2 — PPF: standing rows like fixed deposits, valued by formula at any date. The
+  // government sets the rate every quarter, so each quarter's rate is its own row.
+  `
+  CREATE TABLE ppf_deposits (
+    id           INTEGER PRIMARY KEY,
+    deposit_date TEXT NOT NULL,                   -- YYYY-MM-DD
+    amount_inr   REAL NOT NULL,
+    note         TEXT
+  );
+  CREATE TABLE ppf_rates (
+    quarter_start TEXT PRIMARY KEY,               -- YYYY-04-01 | YYYY-07-01 | YYYY-10-01 | YYYY-01-01
+    rate_pct      REAL NOT NULL
   );
   `,
 ]

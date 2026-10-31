@@ -7,7 +7,7 @@ version is [CLAUDE.md](CLAUDE.md); read it. The essentials:
 
 fingod is a local-first net worth tracker that runs entirely in the browser: vanilla ES modules and SQLite
 compiled to WebAssembly. **You are the connector.** The browser can't speak MCP, so you read the user's
-sources (Wallet, Zerodha Kite, Groww, INDmoney) over MCP and write JSON files into `data/`; the app imports them.
+sources (Wallet, Zerodha Kite, Groww, INDmoney, Coinbase, Binance) over MCP and write JSON files into `data/`; the app imports them.
 
 - If asked to set fingod up, follow [docs/ONBOARDING.md](docs/ONBOARDING.md): a short form in the terminal: selectable
   questions (your multiple-choice tool), then a submit step. [PROMPT.md](PROMPT.md) is the prompt that points there.
@@ -19,9 +19,9 @@ sources (Wallet, Zerodha Kite, Groww, INDmoney) over MCP and write JSON files in
 
 ## Hard rules
 
-1. **Read-only.** Never place, modify or cancel an order. Kite's server exposes `place_order`,
-   `modify_order`, `cancel_order` and GTT tools; this project never calls them. They are also disabled in
-   the project's MCP config for each agent.
+1. **Read-only.** Never place, modify or cancel an order, or move money. Kite's server exposes `place_order`,
+   `modify_order`, `cancel_order` and GTT tools; Coinbase's and Binance's expose orders, transfers and
+   conversions. This project never calls them. They are also disabled in the project's MCP config for each agent.
 2. **Never commit personal financial data.** Everything in `data/` except `data/README.md` is gitignored.
    Never write a token into any file in the repo.
 3. **Send `qty` and `price`, never a computed total.** Match holdings on ISIN, not ticker.
@@ -39,6 +39,8 @@ Declared per agent, and the four must stay in step:
 | Pi | `.pi/mcp.json` (+ `.pi/settings.json`) | trust the project; `/mcp login indmoney`; the skills load as `/skill:setup` and `/skill:refresh` |
 
 Wallet needs `export WALLET_MCP_TOKEN=<token>` before the agent starts. The Kite bridge needs Node 20.18.1+.
+Coinbase signs in like INDmoney. Binance needs `uv` and `export BINANCE_API_KEY` plus `BINANCE_PRIVATE_KEY_PATH`
+(or `BINANCE_API_SECRET`) for a key with only "Enable Reading".
 
 ## Run and test
 

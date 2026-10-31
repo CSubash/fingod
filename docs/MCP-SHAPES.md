@@ -1,6 +1,6 @@
 # MCP response shapes
 
-What the three MCP servers return, and how fingod maps each response onto a checkpoint. Every value
+What the MCP servers return, and how fingod maps each response onto a checkpoint. Every value
 below is **invented** — these are shapes, not anyone's data.
 
 The refresh routine in `.claude/skills/refresh/SKILL.md` is the executable version of this document.
@@ -147,6 +147,45 @@ into the `gold` and `debt` sleeves. Overnight-rate ETFs are cash parked in the d
 - **Availability:** Groww describes access as limited and the product as early-stage.
 - **Ownership:** a second broker for Indian stocks. The same ISIN at Zerodha and Groww is merged into one holding with
   quantities added (`docs/DATA-FORMAT.md`, "One stock at two brokers").
+
+---
+
+## Coinbase
+
+**Unverified.** Written from Coinbase's developer documentation, not from a real account.
+
+- **Server:** `https://agents.coinbase.com/mcp`, Coinbase's official hosted server, plain streamable HTTP with
+  OAuth: you sign in with your Coinbase account and choose which portfolios to share.
+- **Read tools fingod uses:** `balance` (every crypto and fiat balance), `portfolios_get` (balances, positions,
+  allocation, unrealised P&L) and `products_ticker` (a price). The core server prefixes names with `coinbase_`
+  (`coinbase_balance`); match on what `tools/list` returns.
+- **Can trade and move money:** `orders_create`, `orders_edit`, `orders_cancel`, `orders_close_position`,
+  `transfer`, `convert_execute`, `portfolios_create` / `_edit` / `_delete`, and `coinbase_x402_fetch` /
+  `coinbase_x402_pay`. All are blocked in the four agent configs by their documented `coinbase_` names. A name that
+  differs on a live connection is not blocked, which is why onboarding compares them.
+- **Fields:** unknown in detail. Expect per asset a currency code, an amount in units, and a value in the account's
+  fiat currency. Map defensively (SKILL.md §4a).
+- **Ownership:** crypto held at Coinbase, written to the crypto sleeve (`btc`) as `<COIN>.coinbase`.
+
+## Binance
+
+**Unverified, and not official.** Binance publishes no MCP server. fingod uses a community one,
+[`amazing-binance-mcp`](https://github.com/trustxai/binance-mcp) (Apache-2.0), run with `uvx amazing-binance-mcp`.
+
+- **Credentials:** `BINANCE_API_KEY` plus `BINANCE_PRIVATE_KEY_PATH` (Ed25519, recommended) or `BINANCE_API_SECRET`,
+  from the environment. The key should have **only "Enable Reading"**, so it cannot trade or withdraw whatever the
+  server does.
+- **Read tools fingod uses:** `binance_get_wallet_balances` (Spot, Funding, Earn and the rest, per wallet),
+  `binance_get_user_assets` (non-zero Spot balances), `binance_get_funding_wallet`,
+  `binance_get_earn_flexible_positions`, `binance_get_earn_locked_positions`, and `binance_get_ticker_price` for a
+  price.
+- **Can trade and move money:** the `binance_place_*` and `binance_cancel_*` order tools, the convert tools,
+  `binance_transfer_between_wallets` and `binance_convert_dust_to_bnb`. They refuse to run unless
+  `BINANCE_ALLOW_TRADING=1` (fingod never sets it), and they are blocked in the four agent configs too. Withdrawals
+  are not exposed at all.
+- **Fields:** a balance row is an asset code with `free` and `locked` (Spot) or an amount (Funding, Earn). Prices
+  come from `<ASSET>USDT` pairs, so they are in USDT, treated as USD.
+- **Ownership:** crypto held at Binance, written to the crypto sleeve (`btc`) as `<COIN>.binance`.
 
 ---
 

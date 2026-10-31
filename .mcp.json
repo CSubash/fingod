@@ -31,6 +31,18 @@
         "52155"
       ],
       "comment": "Groww's official hosted MCP server (stocks and F&O only; mutual funds are not supported yet), through the bridge Groww documents. Its sign-in only accepts the bridge's callback on port 52155 (http://localhost:52155/oauth/callback); Claude Code's native OAuth sends a random port and /callback, which Groww rejects. Needs Node >= 20.18.1, and port 52155 free. IT EXPOSES ORDER TOOLS and their names are not published: fingod only ever calls read tools. After connecting, list the tools and deny the order ones in .claude/settings.json (see docs/ONBOARDING.md)."
+    },
+    "coinbase": {
+      "type": "http",
+      "url": "https://agents.coinbase.com/mcp",
+      "comment": "Coinbase's official hosted server, OAuth (sign in with /mcp). IT CAN TRADE, TRANSFER AND CONVERT: fingod only reads (balance, portfolios, prices), and the write tools are denied in .claude/settings.json by the names Coinbase documents. When signing in, give it access to as little as Coinbase lets you."
+    },
+    "binance": {
+      "command": "uvx",
+      "args": [
+        "amazing-binance-mcp"
+      ],
+      "comment": "Binance has no official MCP server; this is a community one (PyPI amazing-binance-mcp, Apache-2.0), run with uv. It reads BINANCE_API_KEY plus BINANCE_PRIVATE_KEY_PATH (or BINANCE_API_SECRET) from the environment: export them before starting claude, never write them into a file. Create the key with ONLY 'Enable Reading' ticked, so it cannot trade whatever the server does. Trading stays off unless BINANCE_ALLOW_TRADING=1, which fingod never sets, and the order tools are denied in .claude/settings.json too."
     }
   }
 }

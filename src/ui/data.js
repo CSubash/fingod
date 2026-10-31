@@ -1,4 +1,4 @@
-import { connectorStatus, checkpoints, fixedDeposits, splitwise, targets, transactionCount } from '../repo.js'
+import { connectorStatus, checkpoints, fixedDeposits, ppfDeposits, splitwise, targets, transactionCount } from '../repo.js'
 import { exportBytes, importBytes, reset, getSetting } from '../db.js'
 import { syncInbox, ingestAny, inboxFailures, IngestError } from '../ingest.js'
 import { checkpointPrompt } from '../prompts.js'
@@ -25,8 +25,9 @@ export function render(el) {
         <tr><td class="name">Checkpoints</td><td class="num">${cps.length}${cps.length ? ` · latest ${shortDate(cps.at(-1).as_of_date)}` : ''}</td></tr>
         <tr><td class="name">Wallet transactions</td><td class="num">${transactionCount().toLocaleString('en-IN')}</td></tr>
         <tr><td class="name">Fixed deposits</td><td class="num">${fixedDeposits().length}</td></tr>
+        <tr><td class="name">PPF deposits</td><td class="num">${ppfDeposits().length}</td></tr>
         <tr><td class="name">Splitwise people</td><td class="num">${splitwise().length}</td></tr>
-        <tr><td class="name">Bitcoin (manual)</td><td class="num">${st.btc.ok ? 'set' : '—'}</td></tr>
+        <tr><td class="name">Crypto</td><td class="num">${[st.coinbase.ok && 'Coinbase', st.binance.ok && 'Binance'].filter(Boolean).join(' · ') || (st.btc.ok ? 'typed in' : '—')}</td></tr>
         <tr><td class="name">Allocation targets${getSetting('target_allocation', null) === null ? ' <span class="muted">(defaults, not set yet)</span>' : ''}</td><td class="num">${Object.entries(targets()).map(([k, v]) => `${esc(sleeveLabel(k))} ${v}%`).join(' · ')}</td></tr>
       </tbody></table></section>
 

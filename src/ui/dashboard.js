@@ -19,7 +19,7 @@ function hero(series) {
     <div>
       <div class="hero-label">Total net worth</div>
       <div class="hero-figure" style="font-size:32px">${moneyExact(latest.total)}</div>
-      <div class="hero-secondary">${compact(latest.epf)} EPF · ${compact(latest.fd_accrued)} accrued FD interest · ${compact(latest.splitwise)} owed to you</div>
+      <div class="hero-secondary">${compact(latest.epf)} EPF · ${latest.ppf ? `${compact(latest.ppf)} PPF · ` : ''}${compact(latest.fd_accrued)} accrued FD interest · ${compact(latest.splitwise)} owed to you</div>
       <div class="hero-secondary" style="color:var(--muted);font-size:13px">Cash ${compact(latest.cash)} · cards ${compact(latest.credit_card)} outstanding · as of ${shortDate(latest.as_of_date)}</div>
     </div>
   </div></section>`
@@ -33,7 +33,7 @@ function networthCard(series) {
   })
   return `<section class="card"><header><h2>Net worth</h2></header>${chart}
     <div class="legend"><span><i class="swatch" style="background:var(--ink)"></i>Total</span><span><i class="swatch" style="background:var(--sleeve-in_equity)"></i>Liquid</span></div>
-    <p class="note">Total includes EPF, accrued FD interest and Splitwise receivables. Liquid is what could actually be turned into money.</p></section>`
+    <p class="note">Total includes EPF, PPF, accrued FD interest and Splitwise receivables. Liquid is what could actually be turned into money.</p></section>`
 }
 
 function allocationCard(a) {

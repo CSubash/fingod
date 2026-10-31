@@ -18,7 +18,8 @@
       "Bash(git status --porcelain --untracked-files=no)",
       "Bash(git log --oneline HEAD..origin/main)",
       "Bash(git diff --stat HEAD..origin/main)",
-      "Bash(git pull --ff-only origin main)"
+      "Bash(git pull --ff-only origin main)",
+      "Bash(uvx --version)"
     ],
     "deny": [
       "mcp__kite__place_order",
@@ -26,7 +27,33 @@
       "mcp__kite__cancel_order",
       "mcp__kite__place_gtt_order",
       "mcp__kite__modify_gtt_order",
-      "mcp__kite__delete_gtt_order"
+      "mcp__kite__delete_gtt_order",
+      "mcp__coinbase__coinbase_orders_create",
+      "mcp__coinbase__coinbase_orders_edit",
+      "mcp__coinbase__coinbase_orders_cancel",
+      "mcp__coinbase__coinbase_orders_close_position",
+      "mcp__coinbase__coinbase_transfer",
+      "mcp__coinbase__coinbase_convert_execute",
+      "mcp__coinbase__coinbase_portfolios_create",
+      "mcp__coinbase__coinbase_portfolios_edit",
+      "mcp__coinbase__coinbase_portfolios_delete",
+      "mcp__coinbase__coinbase_x402_fetch",
+      "mcp__coinbase__coinbase_x402_pay",
+      "mcp__binance__binance_place_order",
+      "mcp__binance__binance_cancel_order",
+      "mcp__binance__binance_cancel_all_open_orders",
+      "mcp__binance__binance_cancel_replace_order",
+      "mcp__binance__binance_place_oco_order",
+      "mcp__binance__binance_place_oto_order",
+      "mcp__binance__binance_place_otoco_order",
+      "mcp__binance__binance_cancel_order_list",
+      "mcp__binance__binance_place_twap_order",
+      "mcp__binance__binance_cancel_algo_order",
+      "mcp__binance__binance_transfer_between_wallets",
+      "mcp__binance__binance_accept_convert_quote",
+      "mcp__binance__binance_place_convert_limit_order",
+      "mcp__binance__binance_cancel_convert_limit_order",
+      "mcp__binance__binance_convert_dust_to_bnb"
     ]
   }
 }

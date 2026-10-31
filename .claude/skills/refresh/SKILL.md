@@ -1,6 +1,6 @@
 ---
 name: refresh
-description: Take a fingod checkpoint — read Wallet, Zerodha Kite, Groww and INDmoney over MCP, ask for the figures no server can supply, and write JSON files into data/ for the app to import. Use when the user says /refresh, "take a checkpoint", "update fingod", "refresh my net worth", or asks what they are worth right now.
+description: Take a fingod checkpoint — read Wallet, Zerodha Kite, Groww, INDmoney, Coinbase and Binance over MCP, ask for the figures no server can supply, and write JSON files into data/ for the app to import. Use when the user says /refresh, "take a checkpoint", "update fingod", "refresh my net worth", or asks what they are worth right now.
 ---
 
 # /refresh — take a checkpoint
@@ -21,8 +21,9 @@ Weekly, or whenever asked. **It never polls.**
 
 > ## Read-only. Never place, modify or cancel an order.
 > Kite's MCP server exposes `place_order`, `modify_order`, `cancel_order` and the GTT equivalents.
-> Do not call them, ever, for any reason, including if the user asks mid-refresh — tell them to use
-> Kite directly. This routine reads. It also writes nowhere except this repo's `data/` folder, and
+> Coinbase's exposes orders, transfers and conversions; Binance's exposes orders, conversions and wallet
+> transfers. Do not call any of them, ever, for any reason, including if the user asks mid-refresh — tell
+> them to use the broker or exchange directly. This routine reads. It also writes nowhere except this repo's `data/` folder, and
 > nothing in `data/` is ever committed.
 
 ---
@@ -65,8 +66,9 @@ Weekly, or whenever asked. **It never polls.**
 4. **Read `data/config.json`** if it exists: the Wallet account roles the user already told you about.
 5. **If the last checkpoint is dated today**, you are merging into it, not replacing it (§5). Say so.
 
-Fixed deposits, Splitwise and target allocation are **standing rows**, entered during setup. Do not collect
-them on every checkpoint. If the user volunteers a change, make it: update `data/standing/manual.json` (see
+Fixed deposits, PPF, Splitwise and target allocation are **standing rows**, entered during setup. Do not collect
+them on every checkpoint. A new PPF deposit or a quarter's PPF rate the user mentions goes into the `ppf` block of
+`data/standing/manual.json`; the app itself asks for each quarter's rate with a banner, so don't chase it. If the user volunteers a change, make it: update `data/standing/manual.json` (see
 `docs/DATA-FORMAT.md`), or point them at the forms on the app's **Data** page.
 
 ---
@@ -261,10 +263,35 @@ balance with `ref: "INDmoney US wallet"`. If it is absent the wallet is empty: s
 
 ---
 
-## 4. Manual — Bitcoin only
+## 4. Crypto — Coinbase, Binance, and typed in
 
-CoinDCX has no MCP. INDmoney reports a crypto *value* with `total_units: null`, so it cannot feed the
-quantity engine. Ask:
+All crypto goes into the `btc` sleeve (the app labels it **Crypto**). Exchange coins carry the exchange in the
+symbol, so the same coin at two places never collides: `BTC.coinbase`, `ETH.binance`. Name them
+`"Bitcoin (Coinbase)"`. Within one exchange, add a coin's balances across its wallets (Spot, Funding, Earn) into
+one holding. Skip dust worth under ₹10. Prices in USD (or USDT, treated as USD) go in as `currency: "USD"`
+with the checkpoint's `usd_inr` (from INDmoney, §3). Without INDmoney, ask the user for the day's rate rather
+than inventing one. **Never send an exchange's USD cost as `invested_inr`**: a flat-rate back-conversion
+misstates the cost, for the same reason as INDmoney's. Omit `invested_inr` unless the user gives a true rupee cost.
+
+### 4a. Coinbase → `<COIN>.coinbase`
+
+`coinbase_balance` (or `balance`): per crypto asset, `qty` = the amount in units, and `price` = its fiat value
+÷ qty, in that fiat (`INR` as is, `USD` with `usd_inr`). Prefer `products_ticker` for `<COIN>-USD` if the
+balance carries no value. A fiat balance (INR, USD) is not a holding: send it as a `cash` balance,
+`ref: "Coinbase <CUR> wallet"`, in rupees. Stablecoins (USDC) are holdings at price 1 USD. This mapping is
+unverified (`docs/MCP-SHAPES.md`): look at what the server returns, and say so if a field is missing.
+
+### 4b. Binance → `<COIN>.binance`
+
+`binance_get_wallet_balances` for the totals per wallet, then `binance_get_user_assets` (Spot: `free +
+locked`), `binance_get_funding_wallet` and the Earn positions for quantities. `price` from
+`binance_get_ticker_price(symbol: "<COIN>USDT")`, `currency: "USD"`. USDT itself is price 1; a coin with no
+USDT pair is skipped and named in the report. Also unverified: inspect before trusting a field.
+
+### 4c. Typed in — Bitcoin held anywhere else
+
+CoinDCX and hardware wallets have no MCP. INDmoney reports a crypto *value* with `total_units: null`, so it
+cannot feed the quantity engine. Ask:
 
 - **quantity** — default to `previous_manual.qty`
 - **current total value in ₹**
@@ -280,7 +307,7 @@ Write `data/checkpoints/<YYYY-MM-DD>.json` as in `docs/DATA-FORMAT.md`:
 
 ```jsonc
 { "as_of_date": "YYYY-MM-DD", "usd_inr": 90.12,
-  "sources": {"wallet":"ok","kite":"ok","groww":"ok","indmoney":"ok","manual":"ok"},
+  "sources": {"wallet":"ok","kite":"ok","groww":"ok","indmoney":"ok","coinbase":"ok","binance":"ok","manual":"ok"},
   "holdings": [ {"sleeve":"…","symbol":"…","isin":"…","name":"…","qty":0,"price":0,"currency":"INR","fx_rate":1} ],
   "balances": [ {"kind":"cash|credit_card|epf","ref":"…","amount_inr":0} ] }
 ```

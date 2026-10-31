@@ -4,7 +4,9 @@ import { diff, bySleeve } from '../src/compute/qtydiff.js'
 import { computeNetWorth } from '../src/compute/networth.js'
 import { accrued, value as fdValue } from '../src/compute/fd.js'
 import { allocate } from '../src/compute/allocation.js'
-import { returns, shares, fixedDepositReturns } from '../src/compute/returns.js'
+import { returns, shares, fixedDepositReturns, ppfReturns } from '../src/compute/returns.js'
+import { balance as ppfBalance, quarterStart, quarterLabel, quartersBetween, rateFor } from '../src/compute/ppf.js'
+import { money } from '../src/compute/num.js'
 import { summarise, byPeriod, findDisposals } from '../src/compute/realised.js'
 import { expenseByLabel, labelNets } from '../src/compute/expenses.js'
 
@@ -258,4 +260,65 @@ test('expenses: a modifier label steps aside, and a net-positive label is clampe
   const { series } = expenseByLabel(txns, labels, 'month')
   assert.equal(series[0].segments.Freelance, undefined)
   assert.equal(series[0].net_inflow, 5900)
+})
+
+// --- PPF ----------------------------------------------------------------------
+const D = (deposit_date, amount_inr) => ({ deposit_date, amount_inr })
+const R = (quarter_start, rate_pct) => ({ quarter_start, rate_pct })
+const flat = (rate) => quartersBetween('2024-04-01', '2027-03-31').map((q) => R(q, rate))
+
+test('PPF quarters follow the financial year', () => {
+  assert.equal(quarterStart('2026-11-01'), '2026-10-01')
+  assert.equal(quarterStart('2027-02-14'), '2027-01-01')
+  assert.equal(quarterStart('2026-04-30'), '2026-04-01')
+  assert.equal(quarterLabel('2026-10-01'), 'Q3 FY 2026-27 (Oct–Dec 2026)')
+  assert.equal(quarterLabel('2027-01-01'), 'Q4 FY 2026-27 (Jan–Mar 2027)')
+  assert.deepEqual(quartersBetween('2026-05-10', '2027-01-02'), ['2026-04-01', '2026-07-01', '2026-10-01', '2027-01-01'])
+})
+
+test('PPF: a deposit by the 5th earns for its month; one after the 5th waits a month', () => {
+  const by5 = ppfBalance([D('2024-04-05', 120000)], flat(12), '2024-04-30')
+  assert.equal(by5.accrued, 1200) // 120000 × 12% / 12
+  const late = ppfBalance([D('2024-04-06', 120000)], flat(12), '2024-04-30')
+  assert.equal(late.accrued, 0)
+  assert.equal(late.value, 120000)
+  assert.equal(ppfBalance([D('2024-04-06', 120000)], flat(12), '2024-05-31').accrued, 1200)
+})
+
+test('PPF: only completed months earn, and interest is credited on 31 March, then compounds', () => {
+  assert.equal(ppfBalance([D('2024-04-01', 100000)], flat(12), '2024-04-29').accrued, 0)
+  const march = ppfBalance([D('2024-04-01', 100000)], flat(12), '2025-03-31')
+  assert.equal(march.credited, 12000) // 12 months × 1000
+  assert.equal(march.accrued, 0)
+  assert.equal(march.value, 112000)
+  const april = ppfBalance([D('2024-04-01', 100000)], flat(12), '2025-04-30')
+  assert.equal(april.accrued, 1120) // a month on 112000, not 100000
+  assert.equal(april.value, money(100000 + 12000 + 1120))
+})
+
+test('PPF: each quarter has its own rate; a missing one carries the last forward and is reported', () => {
+  const rates = [R('2024-04-01', 12), R('2024-07-01', 6)]
+  const b = ppfBalance([D('2024-04-01', 120000)], rates, '2024-10-31')
+  assert.equal(b.accrued, 3 * 1200 + 3 * 600 + 600) // Q1 at 12%, Q2 at 6%, October assumed 6%
+  assert.deepEqual(b.missing, ['2024-10-01'])
+  assert.deepEqual(rateFor(rates, '2024-10-01'), { rate_pct: 6, assumed: true })
+  assert.deepEqual(rateFor([], '2024-10-01'), { rate_pct: 0, assumed: true })
+})
+
+test('PPF counts in total net worth, never in liquid', () => {
+  const ppf = { deposits: [D('2024-04-01', 100000)], rates: flat(12) }
+  const without = computeNetWorth({ asOf: '2025-03-31', holdings: [], balances: [], fixedDeposits: [] })
+  const nw = computeNetWorth({ asOf: '2025-03-31', holdings: [], balances: [], fixedDeposits: [], ppf })
+  assert.equal(nw.liquid, without.liquid)
+  assert.equal(nw.ppf, 112000)
+  assert.equal(money(nw.total - nw.liquid), money(nw.epf + nw.ppf + nw.fd_accrued + nw.splitwise))
+})
+
+test('PPF sleeve: interest is market, a deposit is flow', () => {
+  const deps = [D('2024-04-01', 100000), D('2025-04-02', 50000)]
+  const s = ppfReturns(deps, flat(12), '2025-04-30', '2025-03-31')
+  assert.equal(s.flow, 50000)
+  assert.equal(s.market, 1620) // a month on 112000 + 50000
+  assert.equal(money(s.market + s.flow + s.fx), s.delta)
+  assert.equal(s.invested, 150000)
 })

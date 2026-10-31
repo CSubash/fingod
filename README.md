@@ -61,11 +61,11 @@ modern browser.
 ## Features
 
 - **Net worth, two ways.** *Liquid* is what you could act on; *total* adds EPF, accrued FD interest and
-  Splitwise receivables. Both are computed at every checkpoint.
+  Splitwise receivables (and PPF). Both are computed at every checkpoint.
 - **Growth, split honestly.** Every change between checkpoints is separated into **market**, **flow**
   (money you added or withdrew) and **FX**. The three sum exactly to the change, so a ₹50k SIP never
   masquerades as ₹50k of market gain.
-- **Performance across assets.** Indian equity, mutual funds, US equity, gold, debt, Bitcoin and fixed
+- **Performance across assets.** Indian equity, mutual funds, US equity, gold, debt, crypto, PPF and fixed
   deposits on one axis indexed to 100, time-weighted so money you add or take out never distorts it.
 - **Allocation against targets.** Set a target per asset and see the drift and what to buy or sell.
 - **Realised profit.** Sales are detected by diffing checkpoints; you confirm the sale price and it is
@@ -87,7 +87,9 @@ Your coding agent
    ├─ Kite MCP        → Indian equity, Indian mutual funds
    ├─ Groww MCP       → Indian equity (a second broker)
    ├─ INDmoney MCP    → US equity, EPF
-   └─ asks you        → Bitcoin
+   ├─ Coinbase MCP    → crypto at Coinbase
+   ├─ Binance MCP     → crypto at Binance (community server, read-only key)
+   └─ asks you        → Bitcoin held elsewhere
         └──► writes JSON into data/  ──►  a local server lists it  ──►  the browser imports it into SQLite
 ```
 
@@ -115,7 +117,8 @@ only hides which one is wrong:
 | Zerodha Kite | Indian equity, mutual funds, gold and liquid ETFs |
 | Groww | Indian equity held at Groww (merged with Kite by ISIN) |
 | INDmoney | US equity, EPF |
-| Manual | Bitcoin, fixed deposits, Splitwise |
+| Coinbase, Binance | crypto held there |
+| Manual | Bitcoin held elsewhere, fixed deposits, PPF, Splitwise |
 
 ## Documentation
 

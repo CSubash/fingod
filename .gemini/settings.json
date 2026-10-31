@@ -46,6 +46,49 @@
         "https://mcp.groww.in/mcp",
         "52155"
       ]
+    },
+    "coinbase": {
+      "httpUrl": "https://agents.coinbase.com/mcp",
+      "excludeTools": [
+        "coinbase_orders_create",
+        "coinbase_orders_edit",
+        "coinbase_orders_cancel",
+        "coinbase_orders_close_position",
+        "coinbase_transfer",
+        "coinbase_convert_execute",
+        "coinbase_portfolios_create",
+        "coinbase_portfolios_edit",
+        "coinbase_portfolios_delete",
+        "coinbase_x402_fetch",
+        "coinbase_x402_pay"
+      ]
+    },
+    "binance": {
+      "command": "uvx",
+      "args": [
+        "amazing-binance-mcp"
+      ],
+      "env": {
+        "BINANCE_API_KEY": "$BINANCE_API_KEY",
+        "BINANCE_PRIVATE_KEY_PATH": "$BINANCE_PRIVATE_KEY_PATH"
+      },
+      "excludeTools": [
+        "binance_place_order",
+        "binance_cancel_order",
+        "binance_cancel_all_open_orders",
+        "binance_cancel_replace_order",
+        "binance_place_oco_order",
+        "binance_place_oto_order",
+        "binance_place_otoco_order",
+        "binance_cancel_order_list",
+        "binance_place_twap_order",
+        "binance_cancel_algo_order",
+        "binance_transfer_between_wallets",
+        "binance_accept_convert_quote",
+        "binance_place_convert_limit_order",
+        "binance_cancel_convert_limit_order",
+        "binance_convert_dust_to_bnb"
+      ]
     }
   }
 }

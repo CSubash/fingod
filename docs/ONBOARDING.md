@@ -34,9 +34,12 @@ make it **selectable**, and let the user **submit** a whole round at once.
 
 1. **Are you in the repo?** If this folder isn't the fingod repo, clone
    `https://github.com/HarishTeens/fingod.git` and work from inside it.
-2. **Check the tools.** `python3 --version` (3.8+) and `node -v`. Node is only needed for the Kite connector,
-   which needs **20.18.1 or newer**. If it is older and the user wants Kite, tell them to run `nvm install`
-   inside the folder (`.nvmrc` pins 22), then restart this session from that shell.
+2. **Check the tools.** `python3 --version` (3.8+; on Windows the command is often `python`) and `node -v`.
+   Node is only needed for the Kite and Groww connectors, which need **20.18.1 or newer**. If it is older or
+   missing and the user wants Kite, tell them to run `nvm install` inside the folder (`.nvmrc` pins 22; on Windows
+   `winget install OpenJS.NodeJS.LTS`), then restart this session from that shell. The Binance connector runs with
+   **uv** instead: check `uvx --version` once they pick Binance (install: `winget install astral-sh.uv` on Windows,
+   `brew install uv` on macOS, or `curl -LsSf https://astral.sh/uv/install.sh | sh`).
 
 **Do not start the app or open a browser yet.** The browser only shows the result, so opening it now leaves the
 user looking at an empty page while they answer questions, and they have to come back later. You open it once, at
@@ -59,8 +62,8 @@ One batch of questions, answered together. Ask exactly these (Claude Code: one `
 
 | Option | Description |
 |---|---|
-| Bitcoin | Quantity and current value, typed in (no MCP exists for it) |
 | Fixed deposits | Principal, rate and dates; interest is computed |
+| PPF | Each deposit and its date, plus the rate for each quarter; interest is computed |
 | Splitwise | Who owes whom, as a bottom line per person |
 
 **Q3. How should allocation targets be set?** *(single-select, header "Targets")*
@@ -69,6 +72,14 @@ One batch of questions, answered together. Ask exactly these (Claude Code: one `
 |---|---|
 | Use the defaults (Recommended) | 27% Indian equity, 35% mutual funds, 10% US, 5% gold, 5% Bitcoin, 15% FDs, 2% debt, 1% cash |
 | I'll set my own | You'll be asked for the percentages next |
+
+**Q4. Where do you hold crypto?** *(multi-select, header "Crypto"; picking nothing means none)*
+
+| Option | Description |
+|---|---|
+| Coinbase | Read over Coinbase's official MCP server (you sign in once in the browser) |
+| Binance | Read over a community MCP server with a read-only Binance API key |
+| Elsewhere, typed in | Bitcoin on CoinDCX, a hardware wallet or anywhere else: quantity and value, typed in |
 
 Nothing is mandatory: a user with only Bitcoin and one FD still gets a dashboard. That is four options, the most a
 question can hold, so EPF is **not** in Q1: if they picked INDmoney, ask about it in Round 2 (below). Someone with
@@ -81,7 +92,13 @@ Offer to skip any of them.
 
 - **EPF** (only if they picked INDmoney): one selectable question, *"Also pull your EPF balance through INDmoney?"*
   → *Yes (Recommended)* / *No*. It rides on the same connection. This is a different call from Round 1.
-- **Bitcoin.** Quantity, current total value in rupees, and optionally what they paid in total.
+- **Bitcoin** (only if they picked "Elsewhere, typed in"). Quantity, current total value in rupees, and
+  optionally what they paid in total. fingod has no price feed: if they don't know the value, you may look up
+  today's BTC/INR price, show it with its source, and let them confirm it.
+- **PPF.** Every deposit as `date, amount`, one per line, e.g. `2024-04-03, 150000`. For an account that already
+  exists, the simplest start is its passbook balance on a past 1 April as one line, then each deposit since.
+  Then the rate for the current quarter (the government sets it each quarter; it has been 7.1% for a long time,
+  but ask, don't assume). Earlier quarters without a rate use the one before; they can be set later in the app.
 - **Each fixed deposit.** Bank, principal, rate in %, start date, and maturity date (optional). Then a selectable
   question: *Add another deposit?* Yes / No. Interest is computed, so never ask for it.
 - **Splitwise.** People and amounts as a bottom line each. Positive means they owe the user, negative means the
@@ -95,12 +112,13 @@ Before connecting anything or writing a file, show a short summary of what you a
 
 ```
 Connect:   Wallet, Zerodha Kite, Groww, INDmoney (+ EPF)
-By hand:   Bitcoin 0.0125 BTC (₹106,000) · 1 fixed deposit · Splitwise: 2 people
+Crypto:    Coinbase, Binance · Bitcoin typed in: 0.0125 BTC (₹106,000)
+By hand:   1 fixed deposit · PPF: 3 deposits, 7.1% this quarter · Splitwise: 2 people
 Targets:   defaults
 ```
 
 Then one selectable question, **"Start setting this up?"**: *Yes, start (Recommended)* / *Change something*. If they
-want a change, ask which part with a multi-select (Apps, By hand, Targets) and re-ask only that round. Do not
+want a change, ask which part with a multi-select (Apps, Crypto, By hand, Targets) and re-ask only that round. Do not
 continue until they have submitted.
 
 ## 5. Connect each source
@@ -149,6 +167,19 @@ now*), so they are at the keyboard when the link appears. Then:
   `excludeTools`, Pi `toolExposure` set to `"hidden"`. Sign-in is the same clickable-link flow as Kite.
 - **INDmoney.** OAuth in the browser (mobile number, OTP, MPIN). Then SKILL.md §3 for US holdings, EPF (if chosen)
   and USD wallet cash.
+- **Coinbase.** Coinbase's official hosted server, OAuth in the browser like INDmoney (Claude Code: `/mcp`, choose
+  coinbase, Authenticate; Codex `codex mcp login coinbase`; Gemini `/mcp auth coinbase`; Pi `/mcp login coinbase`).
+  **It can trade, transfer and convert.** The configs block those tools by the names Coinbase documents
+  (`coinbase_orders_create` and so on), so after connecting, **list its tools and compare**: if any write tool has a
+  name the configs don't block, tell the user which one and how to block it, exactly as for Groww. When the sign-in
+  asks which portfolios to share, suggest the least it allows. Then SKILL.md §4a.
+- **Binance.** There is no official server; fingod uses a community one (`amazing-binance-mcp`, run with `uvx`).
+  Before the session starts, the user creates an API key in Binance (Account, API Management) with **only "Enable
+  Reading" ticked** (no trading, no withdrawals, so the key cannot move money whatever the server does) and
+  exports `BINANCE_API_KEY` and either `BINANCE_PRIVATE_KEY_PATH` (an Ed25519 key, which Binance recommends) or
+  `BINANCE_API_SECRET`. Never ask them to paste the key or secret into the chat or a file. Never set
+  `BINANCE_ALLOW_TRADING`. If its tools are missing, give the same restart instructions as for Wallet. Then
+  SKILL.md §4b.
 
 Write everything into **one** `data/checkpoints/<YYYY-MM-DD>.json`. If it already exists, **merge** instead of
 overwriting: read it, replace its holdings by `(sleeve, symbol)` and its balances by `(kind, ref)` with your fresh
@@ -161,12 +192,13 @@ ones, keep everything else, and write it back. Send `qty` and `price`, never a t
 "price":<value / qty>,"avg_cost":<paid / qty>,"invested_inr":<paid>}`. If they didn't say what they paid, **leave
 `avg_cost` and `invested_inr` out** entirely: the app then shows no return for it rather than inventing one.
 
-**Fixed deposits, Splitwise and targets** go into `data/standing/manual.json` (see `docs/DATA-FORMAT.md`; the app
-imports it and it is safe to re-send):
+**Fixed deposits, PPF, Splitwise and targets** go into `data/standing/manual.json` (see `docs/DATA-FORMAT.md`; the
+app imports it and it is safe to re-send):
 
 ```json
 {
   "fixed_deposits": [{ "bank": "Example Bank", "principal": 100000, "rate_pct": 6.5, "start_date": "2026-02-01", "maturity_date": "2027-02-01" }],
+  "ppf": { "deposits": [{ "date": "2024-04-03", "amount_inr": 150000 }], "rates": [{ "quarter_start": "2026-10-01", "rate_pct": 7.1 }] },
   "splitwise": [{ "person": "Friend A", "amount_inr": 3000 }],
   "target_allocation": { "in_equity": 27, "in_mf": 35, "us_equity": 10, "gold": 5, "btc": 5, "fd": 15, "debt": 2, "liquid": 1 }
 }
@@ -175,8 +207,13 @@ imports it and it is safe to re-send):
 In `target_allocation`, `liquid` is the cash the app labels **"Bank balances"**. `epf` is also a valid key; leave it
 out (as above) unless the user wants EPF counted in the rebalance, since it can't be rebalanced.
 
+A PPF `quarter_start` is the first day of a financial-year quarter: `YYYY-04-01` (Q1, Apr–Jun), `YYYY-07-01` (Q2),
+`YYYY-10-01` (Q3) or `YYYY-01-01` (Q4, Jan–Mar). Leave `target_allocation` out entirely if the user doesn't want
+targets yet.
+
 Always merge into an existing `data/standing/manual.json` rather than overwriting it: replace fixed deposits by
-`(bank, principal, start_date)` and people by name, and keep the rest.
+`(bank, principal, start_date)`, PPF deposits by `(date, amount_inr)`, PPF rates by quarter and people by name, and
+keep the rest.
 
 ## 7. Check it, then show them the dashboard
 
@@ -205,6 +242,8 @@ This is the first time the user sees the app, and it already shows their data.
 Tell the user, briefly:
 
 - what you connected and what you found (net worth in rupees, the biggest holdings);
+- if they have a PPF: at the start of each quarter the app shows a banner asking for that quarter's rate, and the
+  Data page lets them add, change or remove any deposit;
 - anything stale or skipped;
 - how to take a checkpoint later: say "take a checkpoint" (Claude Code also has `/refresh`) in this folder. Each
   checkpoint starts by updating fingod to the latest `main` (a safe fast-forward pull) and telling them what changed;

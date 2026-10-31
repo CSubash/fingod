@@ -202,7 +202,7 @@ python3 -m http.server 8000 --bind 127.0.0.1     # then open http://localhost:80
     <details><summary>Can it place trades?</summary><p>No. Every connector is read-only, and the instructions forbid order tools outright. Kite's server exposes them; fingod never calls them.</p></details>
     <details><summary>Which assistants work?</summary><p>Claude Code, Codex CLI, Gemini CLI and Pi are set up out of the box: the repo ships each one&rsquo;s project MCP config (<code>.mcp.json</code>, <code>.codex/config.toml</code>, <code>.gemini/settings.json</code>, <code>.pi/mcp.json</code>) and instructions (<code>CLAUDE.md</code>, <code>AGENTS.md</code>). Any other assistant with shell access and MCP support can follow the same prompt.</p></details>
     <details><summary>Why start the assistant inside the folder?</summary><p>An assistant only loads a project&rsquo;s MCP servers when its session starts in that folder, and you approve them at that moment. Cloning first and starting the assistant from inside it means the whole setup runs in one session, with nothing to restart.</p></details>
-    <details><summary>Do I need every connector?</summary><p>No. Pick the ones you use. Bitcoin, fixed deposits and Splitwise are just typed in. You can also look around first with the built-in demo data.</p></details>
+    <details><summary>Do I need every connector?</summary><p>No. Pick the ones you use. Bitcoin held off-exchange, fixed deposits, PPF and Splitwise are just typed in. You can also look around first with the built-in demo data.</p></details>
     <details><summary>Why does it need Python?</summary><p>Only for <code>serve.py</code>, a tiny static file server. Browsers won't load WebAssembly from a plain file, and the server also lets the app see the folder your assistant writes to. There is no backend and nothing to install.</p></details>
     <details><summary>What does it cost?</summary><p>Nothing. It's open source under the Apache 2.0 license.</p></details>
   </div>
@@ -222,9 +222,9 @@ python3 -m http.server 8000 --bind 127.0.0.1     # then open http://localhost:80
   }
   var AGENTS = {
     claude: { cmd: 'claude', hint: 'Starting inside the folder is what lets Claude Code load the project\u2019s MCP servers. It asks you to approve them once.' },
-    codex: { cmd: 'codex', hint: 'Codex loads <code>.codex/config.toml</code> once you trust the project. Sign in to INDmoney with <code>codex mcp login indmoney</code>.' },
-    gemini: { cmd: 'gemini', hint: 'Gemini CLI reads <code>.gemini/settings.json</code> from the project. Sign in to INDmoney with <code>/mcp auth indmoney</code>.' },
-    pi: { cmd: 'pi', hint: 'Pi loads <code>.pi/mcp.json</code> once you trust the project. Sign in to INDmoney with <code>/mcp login indmoney</code>.' }
+    codex: { cmd: 'codex', hint: 'Codex loads <code>.codex/config.toml</code> once you trust the project. Sign in to INDmoney with <code>codex mcp login indmoney</code> (Coinbase: <code>codex mcp login coinbase</code>).' },
+    gemini: { cmd: 'gemini', hint: 'Gemini CLI reads <code>.gemini/settings.json</code> from the project. Sign in to INDmoney with <code>/mcp auth indmoney</code> (Coinbase: <code>/mcp auth coinbase</code>).' },
+    pi: { cmd: 'pi', hint: 'Pi loads <code>.pi/mcp.json</code> once you trust the project. Sign in to INDmoney with <code>/mcp login indmoney</code> (Coinbase: <code>/mcp login coinbase</code>).' }
   };
   var CLONE = 'git clone https://github.com/HarishTeens/fingod.git && cd fingod && ';
   document.querySelectorAll('[data-agent]').forEach(function (b) {

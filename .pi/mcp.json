@@ -28,6 +28,45 @@
       "description": "Groww: Indian stocks held at Groww. Exposes order tools; fingod only calls read tools.",
       "command": "npx",
       "args": ["-y", "mcp-remote", "https://mcp.groww.in/mcp", "52155"]
+    },
+    "coinbase": {
+      "description": "Coinbase: crypto balances. Can trade; fingod only reads.",
+      "url": "https://agents.coinbase.com/mcp",
+      "toolExposure": {
+        "coinbase_orders_create": "hidden",
+        "coinbase_orders_edit": "hidden",
+        "coinbase_orders_cancel": "hidden",
+        "coinbase_orders_close_position": "hidden",
+        "coinbase_transfer": "hidden",
+        "coinbase_convert_execute": "hidden",
+        "coinbase_portfolios_create": "hidden",
+        "coinbase_portfolios_edit": "hidden",
+        "coinbase_portfolios_delete": "hidden",
+        "coinbase_x402_fetch": "hidden",
+        "coinbase_x402_pay": "hidden"
+      }
+    },
+    "binance": {
+      "description": "Binance (community server, read-only API key): crypto balances. Trading is off; fingod only reads.",
+      "command": "uvx",
+      "args": ["amazing-binance-mcp"],
+      "toolExposure": {
+        "binance_place_order": "hidden",
+        "binance_cancel_order": "hidden",
+        "binance_cancel_all_open_orders": "hidden",
+        "binance_cancel_replace_order": "hidden",
+        "binance_place_oco_order": "hidden",
+        "binance_place_oto_order": "hidden",
+        "binance_place_otoco_order": "hidden",
+        "binance_cancel_order_list": "hidden",
+        "binance_place_twap_order": "hidden",
+        "binance_cancel_algo_order": "hidden",
+        "binance_transfer_between_wallets": "hidden",
+        "binance_accept_convert_quote": "hidden",
+        "binance_place_convert_limit_order": "hidden",
+        "binance_cancel_convert_limit_order": "hidden",
+        "binance_convert_dust_to_bnb": "hidden"
+      }
     }
   }
 }
