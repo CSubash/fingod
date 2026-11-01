@@ -54,7 +54,7 @@ src/db.js            open the database, persist it to IndexedDB, query helpers
 src/schema.js        the SQLite schema (versioned migrations)
 src/ingest.js        validate and store checkpoints, transactions, manual entries, standing rows
 src/repo.js          read models the UI draws from
-src/compute/         pure functions: qty-diff, net worth, FD interest, returns, realised, expenses
+src/compute/         pure functions: qty-diff, net worth, FD interest, returns, XIRR, benchmarks, cash flow, investment income, capital gains, realised, expenses
 src/ui/              one module per page, plus charts.js (SVG strings) and format.js
 src/demo.js          invented demo dataset
 src/prompts.js       the setup prompt and the coding agents we ship config for

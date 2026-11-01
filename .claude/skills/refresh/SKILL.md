@@ -274,6 +274,67 @@ previous checkpoint (the cost only changes if the quantity does).
 
 ---
 
+## 4b. Benchmarks — daily history, in one file
+
+The Investments page sets the portfolio against the Nifty 50 and the S&P 500. Load them as **history**, not one
+number per checkpoint, so a backfill is a single call each. Never write a number you did not just read, and
+leave a benchmark out rather than guess it.
+
+- **Nifty 50.** INDmoney `lookup_ind_keys` for `NIFTY 50` (`IN_STOCKS`) gives `INDI00012`; then
+  `get_indian_stocks_ohlc(ind_key, interval: "1day", lookback: "1y")`, up to 250 daily candles. Or Kite
+  `get_historical_data` with instrument token `256265` (`NSE:NIFTY 50`), `interval: "day"`. Take each candle's
+  `close`, and the date from `datetime_ist` (its date part).
+- **S&P 500 (SPY).** INDmoney `get_us_stocks_ohlc(symbols: ["SPY"], duration)` where `duration` is the smallest of
+  `1w 1m 3m 6m 1y 3y 5y 10y` that reaches back past the **earliest checkpoint** by a week. Take each `close`. SPY
+  stands in for the index, so no index feed is needed; the app converts it to rupees. If `candles_total` is
+  larger than the candles returned, the series was sampled and may have gaps over a week: choose a shorter
+  `duration` or say so.
+- **Official closes only.** Drop a candle for a session still in progress, and one whose volume is `0`; it may be
+  partial. A checkpoint then reads the previous close, which the app allows within seven days.
+
+Write `data/benchmarks/history-<YYYY-MM-DD>.json` as in `docs/DATA-FORMAT.md` and check it with
+`python3 -m json.tool`. Run this on every refresh: re-sending is idempotent, so the file only has to reach
+back to the last checkpoint, and a first run fills the whole history. A checkpoint can still carry its own
+`benchmarks` levels, which win over the history, but the history file is the way to do it.
+
+No public API is needed. The open options are unofficial (NSE site scrapers, Yahoo's chart endpoint, Stooq)
+and can break or throttle; the two brokers are already connected and read-only.
+
+---
+
+## 4c. Trade ledger — history that a snapshot cannot see (offer, don't assume)
+
+Checkpoints only know what is still held, so they cannot date a purchase or price a sale. A **trade ledger**
+fixes that: exact XIRR, the cost and holding period of every lot, and capital gains by financial year. Offer it
+once, and again if the user asks about tax, XIRR or "what did I really earn". Never invent a row.
+
+Ask the user for what they can export, then convert it (you are the connector):
+
+- **Zerodha tradebook** (Console → Reports → Tradebook, CSV). Columns include `symbol`, `isin`, `trade_date`,
+  `trade_type`, `quantity`, `price`, `trade_id`. `trade_type` is `buy` or `sell`, `trade_id` becomes `id`,
+  `sleeve` follows §1 (the ISIN decides `gold`/`debt`). It has no charges, so cost is slightly understated.
+- **Mutual fund history** (a detailed CAS from MFCentral, CAMS or KFintech; the PDF is password-protected and
+  the user must supply the password). Purchases and SIP instalments are `buy`, redemptions `sell`, a switch is a
+  `sell` of one fund and a `buy` of the other. Use whatever parser the user already has; do not install one
+  without asking. `units` is `qty` and the NAV is `price`.
+- **Groww and INDmoney** order reports, if they can export them. For US trades record `currency: "USD"` and the
+  USD/INR rate on the trade date as `fx_rate`, so cost is in rupees.
+
+Write `data/ledger/<source>-<date>.json` as in `docs/DATA-FORMAT.md` and check it with
+`python3 -m json.tool`. The app lists every position where the ledger disagrees with the latest checkpoint (a
+missing trade, a bonus or a split); tell the user which ones, since gains and XIRR for those are unreliable.
+Re-sending a file is safe: rows are idempotent on `id`.
+
+## 4d. Other assets and loans — ask once
+
+Ask whether the user has NPS, PPF, property, physical gold or any loan, and write what they say into
+`data/standing/manual.json` as `assets` and `liabilities` (formats in `docs/DATA-FORMAT.md`). These have no
+MCP, so the user supplies the value; ask for fresh values only when they mention a change or about once a
+quarter, and add a **new dated entry** rather than overwriting, so history keeps what was true then. A loan
+is the amount owed, as a positive number.
+
+---
+
 ## 5. Write the checkpoint
 
 Write `data/checkpoints/<YYYY-MM-DD>.json` as in `docs/DATA-FORMAT.md`:
@@ -335,6 +396,11 @@ market =  qty_p × (price_n − price_p) × fx_n
 flow   = (qty_n − qty_p) × price_n   × fx_n
 fx     =  qty_p ×  price_p × (fx_n − fx_p)        # 0 for INR holdings
 ```
+
+Also point the user at what the app now shows once there is data for it: the **XIRR** (the annual rate that
+accounts for when money went in, after about three months of history) and the comparison **against Nifty 50 and
+the S&P 500** on Investments, and the **savings rate and runway** on the Dashboard. You cannot read those
+figures from here, so say where to look rather than estimating them.
 
 ### Price watch — always include it in the report
 

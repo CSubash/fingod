@@ -1,15 +1,16 @@
 // Hand-entered figures: Bitcoin, fixed deposits, Splitwise and allocation targets.
 // Your agent can also write these as a file (docs/DATA-FORMAT.md, "Standing rows");
 // these forms are for quick edits any time.
-import { fixedDeposits, splitwise, targets, manualBtc } from '../repo.js'
+import { fixedDeposits, splitwise, targets, manualBtc, manualAssets } from '../repo.js'
 import { getSetting, setSetting } from '../db.js'
-import { setManualHolding, saveFixedDeposit, deleteFixedDeposit, saveSplitwise, deleteSplitwise, IngestError } from '../ingest.js'
+import { setManualHolding, saveFixedDeposit, deleteFixedDeposit, saveSplitwise, deleteSplitwise, saveAsset, deleteAsset, ASSET_KINDS, LIABILITY_KINDS, IngestError } from '../ingest.js'
 import { esc, money, sleeveLabel } from './format.js'
 
+const KIND_LABEL = (k) => k.replace(/_/g, ' ')
 const TARGET_KEYS = ['in_equity', 'in_mf', 'us_equity', 'gold', 'debt', 'btc', 'fd', 'liquid', 'epf']
 
 export function section() {
-  const m = manualBtc(), fds = fixedDeposits(), sw = splitwise(), t = targets()
+  const m = manualBtc(), fds = fixedDeposits(), sw = splitwise(), t = targets(), assets = manualAssets()
   const isDefault = getSetting('target_allocation', null) === null
   return `<section class="card"><header><h2>Bitcoin</h2></header>
     <p class="hero-secondary" style="margin-top:0">Exchanges like CoinDCX have no MCP, so you type two numbers. The quantity is carried into later checkpoints; next time only the value changes.</p>
@@ -29,6 +30,13 @@ export function section() {
     <p class="hero-secondary" style="margin-top:0">Just the bottom line per person. Positive means they owe you; negative means you owe them.</p>
     ${sw.length ? `<ul class="rows">${sw.map((p) => `<li>${esc(p.person)} · ${money(p.amount_inr)}<button class="btn" data-del-sw="${esc(p.person)}">Remove</button></li>`).join('')}</ul>` : ''}
     <form class="form inline" data-form="sw"><label>Person<input name="person" required></label><label>Amount ₹<input name="amount" type="number" step="any" required></label><label>Note<input name="note"></label><button class="btn primary" type="submit">Add</button></form></section>
+
+  <section class="card"><header><h2>Other assets and loans</h2></header>
+    <p class="hero-secondary" style="margin-top:0">NPS, PPF, property, physical gold, and what you owe on a loan. They move your total net worth but not the liquid figure. Enter a newer value any time: earlier checkpoints keep the value that was true then.</p>
+    ${(() => { const latest = new Map(); for (const a of assets) latest.set(`${a.kind}\0${a.name}`, a); const rows = [...latest.values()]; return rows.length ? `<ul class="rows">${rows.map((a) => `<li>${esc(a.name)} <span class="muted">· ${esc(KIND_LABEL(a.kind))}${a.liability ? ' (loan)' : ''}</span> · ${money(a.value_inr)} <span class="muted">as of ${esc(a.as_of_date)}</span><button class="btn" data-del-asset="${esc(a.kind)}|${esc(a.name)}">Remove</button></li>`).join('')}</ul>` : '<p class="muted" style="margin-top:0">None yet.</p>' })()}
+    <form class="form inline" data-form="asset"><label>Type<select name="kind">${[...ASSET_KINDS.map((k) => `<option value="${k}">${esc(KIND_LABEL(k))}</option>`), ...LIABILITY_KINDS.map((k) => `<option value="loan:${k}">${esc(KIND_LABEL(k))} (you owe)</option>`)].join('')}</select></label>
+      <label>Name<input name="name" placeholder="NPS Tier 1" required></label><label>Value ₹<input name="value" type="number" step="any" min="0" required></label><label>As of<input name="as_of" type="date" value="${new Date().toISOString().slice(0, 10)}"></label>
+      <button class="btn primary" type="submit">Save</button></form></section>
 
   <section class="card"><header><h2>Allocation targets</h2></header>
     <p class="hero-secondary" style="margin-top:0">Where do you want your money to be? The dashboard shows the drift. Percentages should total 100. Set an asset to 0 to keep it out of the rebalance (EPF, say).${isDefault ? ' <b>These are the defaults; you have not set your own.</b>' : ''}</p>
@@ -54,6 +62,7 @@ export function bind(el, redraw) {
       if (f.dataset.form === 'btc') setManualHolding({ qty: d.qty, value: d.value, invested_inr: d.invested || null })
       else if (f.dataset.form === 'fd') saveFixedDeposit(d)
       else if (f.dataset.form === 'sw') saveSplitwise(d.person, d.amount, d.note)
+      else if (f.dataset.form === 'asset') { const loan = d.kind.startsWith('loan:'); saveAsset({ kind: loan ? d.kind.slice(5) : d.kind, name: d.name, value_inr: d.value, as_of_date: d.as_of, liability: loan }) }
       else if (f.dataset.form === 'targets') saveTargets(f)
       redraw()
     } catch (err) { alert(err instanceof IngestError ? err.message : String(err)) }
@@ -61,6 +70,7 @@ export function bind(el, redraw) {
   el.addEventListener('click', (e) => {
     const fd = e.target.closest('[data-del-fd]'); if (fd) { deleteFixedDeposit(Number(fd.dataset.delFd)); redraw() }
     const sw = e.target.closest('[data-del-sw]'); if (sw) { deleteSplitwise(sw.dataset.delSw); redraw() }
+    const as = e.target.closest('[data-del-asset]'); if (as) { const [kind, ...name] = as.dataset.delAsset.split('|'); deleteAsset(kind, name.join('|')); redraw() }
   })
   total()
 }

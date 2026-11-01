@@ -1,4 +1,4 @@
-import { trades, disposals } from '../repo.js'
+import { trades, disposals, ledgerView } from '../repo.js'
 import { summarise, byPeriod } from '../compute/realised.js'
 import { recordTrade, deleteTrade, IngestError } from '../ingest.js'
 import { stackedBars } from './charts.js'
@@ -24,13 +24,29 @@ function detected(d) {
     <p class="note">Two blind spots are structural: a stock bought <i>and</i> sold between two checkpoints never appears in a snapshot, and a week with both a sale and a purchase of the same stock nets to one disposal. Weekly checkpoints mean weekly resolution.</p></section>`
 }
 
+function capitalGains(v) {
+  if (!v) return ''
+  const yr = (y) => `<tr><td class="name">${esc(y.fy)}</td><td class="num">${y.disposals}</td><td class="num">${delta(y.st)}</td><td class="num">${delta(y.lt)}</td><td class="num">${y.slab_gain ? delta(y.slab_gain) : '—'}</td><td class="num">${y.est_tax ? money(y.est_tax) : '—'}${y.notes.length ? `<div style="color:var(--muted);font-size:12px;max-width:260px;margin-left:auto">${esc(y.notes.join('; '))}</div>` : ''}</td></tr>`
+  const warn = [
+    v.mismatches.length ? `<p class="note" style="color:var(--critical)">The ledger disagrees with what you hold for ${v.mismatches.length} position${v.mismatches.length === 1 ? '' : 's'}: ${esc(v.mismatches.slice(0, 5).map((m) => `${m.symbol} (ledger ${plain(m.ledger_qty, 3)}, held ${plain(m.held_qty, 3)})`).join(', '))}${v.mismatches.length > 5 ? ', …' : ''}. A trade is missing, or a bonus or split is not in the ledger. Gains on those positions may be wrong, and XIRR is left blank for their sleeves.</p>` : '',
+    v.unmatched.length ? `<p class="note" style="color:var(--critical)">${v.unmatched.length} sale${v.unmatched.length === 1 ? '' : 's'} had no purchase behind ${v.unmatched.length === 1 ? 'it' : 'them'} (${esc(v.unmatched.slice(0, 4).map((u) => u.symbol).join(', '))}${v.unmatched.length > 4 ? ', …' : ''}): the ledger starts after the position was opened. They are left out rather than counted as pure profit.</p>` : '',
+  ].join('')
+  return `<section class="card"><header><h2>Capital gains, from your trade ledger</h2></header>
+    <p class="note" style="margin-top:0">${v.trades.toLocaleString('en-IN')} trades from ${shortDate(v.from)} to ${shortDate(v.to)}, matched first-in first-out. Unlike the sales above, which are inferred from two snapshots, these have exact dates and prices.</p>${warn}
+    ${v.years.length ? `<div class="table-wrap"><table class="data"><thead><tr><th>Financial year</th><th class="num">Sales</th><th class="num">Short-term</th><th class="num">Long-term</th><th class="num">At slab rate</th><th class="num">Estimated tax</th></tr></thead><tbody>${v.years.map(yr).join('')}</tbody></table></div>` : '<div class="empty">No sales in the ledger yet.</div>'}
+    <p class="note"><b>An estimate, not tax advice.</b> Listed equity and equity funds: long-term after 12 months, 12.5% above a ₹1.25 lakh yearly exemption, short-term 20% (15% and 10% with ₹1 lakh before 23 Jul 2024). Foreign shares are long-term after 24 months, gold ETFs after 12. It is before surcharge and cess, and it does not model indexation or carrying losses forward. Debt funds and short-term gains on foreign shares and gold are taxed at your slab rate, so they show as gains but not as tax. Mutual funds are assumed to be equity-oriented.</p>
+    ${v.disposals.length ? `<details><summary>Every sale (${v.disposals.length})</summary><div class="table-wrap"><table class="data"><thead><tr><th>Holding</th><th class="num">Bought</th><th class="num">Sold</th><th class="num">Qty</th><th class="num">Cost</th><th class="num">Proceeds</th><th class="num">Gain</th><th>Term</th></tr></thead><tbody>
+      ${v.disposals.slice(0, 200).map((d) => `<tr><td class="name">${esc(d.name)}</td><td class="num">${shortDate(d.buy_date)}</td><td class="num">${shortDate(d.sell_date)}</td><td class="num">${plain(d.qty, d.qty % 1 ? 3 : 0)}</td><td class="num">${money(d.cost)}</td><td class="num">${money(d.proceeds)}</td><td class="num">${delta(d.gain)}</td><td>${d.term || 'slab'}</td></tr>`).join('')}
+    </tbody></table></div>${v.disposals.length > 200 ? '<p class="note">The latest 200 are shown.</p>' : ''}</details>` : ''}</section>`
+}
+
 export function render(el) {
   const draw = () => {
     const ts = trades()
     const s = summarise(ts)
     const d = disposals()
     const periods = byPeriod([...ts].reverse(), gran)
-    el.innerHTML = `<div class="grid" style="gap:16px">${detected(d)}
+    el.innerHTML = `<div class="grid" style="gap:16px">${detected(d)}${capitalGains(ledgerView())}
     <section class="card"><header><h2>Realised profit</h2></header>${ts.length ? `
       <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:20px">
         ${stat('Realised', delta(s.realised, moneyExact), `${s.return_pct === null ? '' : `${plain(s.return_pct)}% on ${compact(s.invested)} invested`}`)}
