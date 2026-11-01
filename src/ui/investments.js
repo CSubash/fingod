@@ -1,6 +1,6 @@
-import { investmentsView, RANGE_IDS } from '../repo.js'
-import { lineChart, interactiveLegend, bindHighlight } from './charts.js'
-import { compact, moneyExact, plain, pct, shortDate, sleeveLabel, sleeveColor, delta, esc, money } from './format.js'
+import { investmentsView, incomeView, RANGE_IDS } from '../repo.js'
+import { lineChart, stackedBars, interactiveLegend, bindHighlight } from './charts.js'
+import { compact, moneyExact, plain, pct, shortDate, monthLabel, sleeveLabel, sleeveColor, delta, esc, money } from './format.js'
 
 const RANGE_LABEL = { '1w': '1 week', '1m': '1 month', '3m': '3 months', '1y': '1 year', all: 'All' }
 let range = '3m', open = null
@@ -25,6 +25,29 @@ function indexed(v) {
     : c.missing.length ? ` ${c.missing.map((m) => esc(m.label)).join(' and ')} ${c.missing.length === 1 ? 'is' : 'are'} not shown: the benchmark history does not reach back to ${shortDate(c.since)}.` : ''
   return `<div data-chart>${chart}${interactiveLegend(all, hidden)}</div>
     <p class="note">Click a name to hide its line (the chart rescales); hover a name or a line to light it up. Every line starts at 100 on ${shortDate(v.compared_to || v.series[0].as_of)}, so the lines compare <i>rates</i> of change rather than sizes. They are time-weighted: money you added or took out is left out, so a SIP never reads as a gain and a sale never reads as a crash. The thick white line is your whole portfolio (holdings, not fixed deposits); the dashed lines are the indices, with the S&amp;P 500 converted to rupees at each checkpoint's USD/INR, which is what an Indian investor would have earned. A line above 100 has grown since then.${hint}</p>`
+}
+
+const INCOME_KINDS = [['dividends', 'Dividends', 'var(--cat-1)'], ['interest', 'Interest', 'var(--cat-3)'], ['unspecified', 'No note', 'var(--cat-other)']]
+
+function incomeCard() {
+  const i = incomeView()
+  if (!i) return ''
+  const kinds = INCOME_KINDS.filter(([k]) => i[k] > 0)
+  const chart = stackedBars({
+    periods: i.months.map((m) => ({ period: m.month, label: monthLabel(m.month), segments: Object.fromEntries(kinds.map(([k]) => [k, m[k]])) })),
+    keys: kinds.map(([k]) => k).reverse(), color: (k) => INCOME_KINDS.find(([x]) => x === k)[2], yFormat: compact, title: 'Dividends and interest received by month', link: false,
+  })
+  const stat = (label, value, sub) => `<div><div class="hero-label">${label}</div><div class="hero-figure" style="font-size:28px">${value}</div><div class="hero-secondary" style="margin-top:2px;font-size:13px">${sub}</div></div>`
+  return `<section class="card"><header><h2>Income from investments — last 12 months</h2></header>
+    <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:20px;margin-bottom:12px">
+      ${stat('Received', moneyExact(i.total), `${monthLabel(i.from)} to ${monthLabel(i.to)}`)}
+      ${stat('A month', compact(i.monthly_avg), `paid in ${i.months_paid} of 12 months`)}
+      ${stat('Dividends', compact(i.dividends), i.payers.length ? `from ${i.payers.length} payer${i.payers.length === 1 ? '' : 's'}` : 'none noted')}
+      ${stat('Interest', compact(i.interest), i.unspecified ? `plus ${compact(i.unspecified)} with no note` : 'bank and FD interest')}
+    </div>${chart}
+    <div class="legend">${kinds.map(([, l, c]) => `<span><i class="swatch" style="background:${c}"></i>${l}</span>`).join('')}</div>
+    ${i.payers.length ? `<div class="table-wrap" style="margin-top:12px"><table class="data"><thead><tr><th>Biggest dividend payers</th><th class="num">Received</th><th class="num">Share</th></tr></thead><tbody>${i.payers.slice(0, 8).map((p) => `<tr><td class="name">${esc(p.name)}</td><td class="num">${compact(p.amount)}</td><td class="num">${plain((p.amount / i.dividends) * 100, 0)}%</td></tr>`).join('')}</tbody></table></div>` : ''}
+    <p class="note">Everything Wallet files under "Interest, dividends", counted when the money arrived. A credit you never entered in Wallet is not here. Wallet has no field for which it was, so the split reads the note: "interest" or "FD" means interest, any other note is read as a dividend from that name, and a credit with no note is shown separately rather than guessed. This is cash received, not a yield, and it makes no forecast.</p></section>`
 }
 
 const xirrCell = (x) => (x ? `${delta(x.pct, (n) => `${plain(n, 1)}%`)}<div style="color:var(--muted);font-size:12px">${x.basis === 'ledger' ? 'since first trade' : 'annualised'}</div>` : '—')
@@ -58,6 +81,7 @@ export function render(el) {
         <td class="num">${s.market === null ? '—' : delta(s.market)}</td><td class="num">${s.flow === null ? '—' : delta(s.flow)}</td><td class="num">${s.fx === null ? '—' : delta(s.fx)}</td></tr>`).join('')}
       </tbody></table></div>
       <p class="note"><b>Since bought</b> is cost basis against today's value. <b>Market / flow / fx</b> is what happened between the two checkpoints: the price moving, money you added or took out, and the rupee moving. They sum to the change exactly, which is what stops a SIP looking like a gain. <b>XIRR</b> is the annual rate that accounts for when you added money; it needs about three months of history, or a trade ledger for the exact dates.${x.sleeves.some((s) => s.stale) ? ' A sleeve whose source was stale is left out of the split rather than booked as a crash.' : ''}</p></section>
+    ${incomeCard()}
     ${open && x.sleeves.find((s) => s.sleeve === open) ? holdingsTable(x.sleeves.find((s) => s.sleeve === open)) : ''}</div>`
   }
   draw()

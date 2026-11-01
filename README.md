@@ -71,6 +71,8 @@ modern browser.
   Nifty 50 and the S&P 500 (in rupees), like for like.
 - **Savings rate and runway.** What you earned, spent and saved each month, and how many months of spending
   your net worth would cover.
+- **Income from investments.** Dividends and interest received over the last 12 months, by month, with your biggest
+  dividend payers, read from Wallet's "Interest, dividends" category.
 - **Capital gains, optionally.** Give your agent a tradebook or a mutual fund statement and fingod matches
   every lot first-in first-out: exact holding periods, short- versus long-term gains by financial year, and an
   estimate of the tax (an estimate, not advice).

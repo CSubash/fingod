@@ -10,6 +10,7 @@ import { xirr, sleeveFlows } from './compute/xirr.js'
 import { BENCHMARKS, levelAt, compareToBenchmarks } from './compute/benchmark.js'
 import { fifo, summariseGains, reconcile, ledgerXirr, termOf } from './compute/gains.js'
 import { cashflow } from './compute/cashflow.js'
+import { investmentIncome } from './compute/income.js'
 
 const parse = (r) => ({ ...r, sources: JSON.parse(r.sources || '{}'), benchmarks: JSON.parse(r.benchmarks || '{}') })
 
@@ -179,6 +180,13 @@ export function cashflowView() {
   const series = networthSeries()
   const latest = series.at(-1)
   return cashflow(transactionsAll(), labelsMap(), { asOf: latest ? latest.as_of_date : null, liquid: latest ? latest.liquid : null, total: latest ? latest.total : null })
+}
+
+/** Dividends and interest received over the trailing 12 months, from Wallet. */
+export function incomeView() {
+  if (!transactionCount()) return null
+  const latest = networthSeries().at(-1)
+  return investmentIncome(transactionsAll(), { asOf: latest ? latest.as_of_date : null })
 }
 
 /** Sales detected between the last two checkpoints. */

@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 import { xirr, sleeveFlows, midpoint } from '../src/compute/xirr.js'
 import { fifo, termOf, fyOf, summariseGains, reconcile, ledgerXirr } from '../src/compute/gains.js'
 import { cashflow } from '../src/compute/cashflow.js'
+import { investmentIncome, kindOf, payerOf, INCOME_CATEGORY_ID } from '../src/compute/income.js'
 import { compareToBenchmarks, levelAt } from '../src/compute/benchmark.js'
 import { computeNetWorth } from '../src/compute/networth.js'
 import { classify, ingestLedger, ingestBenchmarks, validateCheckpoint, IngestError } from '../src/ingest.js'
@@ -262,4 +263,38 @@ test('a benchmark history file is told apart from a checkpoint that carries one 
 test('a benchmark history file names every bad row', () => {
   const bad = { benchmarks: { dow: [], nifty50: [{ date: '16/10/2026', level: 24000 }, { date: '2026-10-17', level: -1 }] } }
   assert.throws(() => ingestBenchmarks(bad), (e) => e instanceof IngestError && /dow/.test(e.message) && /date must be/.test(e.message) && /level must be/.test(e.message))
+})
+
+// --- income from investments ----------------------------------------------------
+test('income: dividends and interest are split by note, windowed to 12 months, and transfers are ignored', () => {
+  const t = (id, txn_date, amount_inr, note, extra = {}) => ({ id, txn_date, amount_inr, note, category: 'Interest, dividends', category_id: INCOME_CATEGORY_ID, is_transfer: 0, ...extra })
+  const txns = [
+    t('a', '2026-10-05', 1000, 'ACME dividend'),
+    t('b', '2026-10-20', 500, 'Final DIV ACME'),
+    t('c', '2026-09-30', 300, 'FD interest'),
+    t('d', '2026-08-01', 120, ''),
+    t('old', '2025-09-30', 9999, 'ACME dividend'), // 13 months back: outside the window
+    t('x', '2026-10-06', 777, 'moved', { is_transfer: 1 }),
+    t('neg', '2026-10-07', -50, 'reversal'),
+    { id: 'other', txn_date: '2026-10-08', amount_inr: 4000, note: 'Salary', category: 'Wage', category_id: 'c-wage', is_transfer: 0 },
+  ]
+  const r = investmentIncome(txns, { asOf: '2026-10-31' })
+  assert.equal(r.from, '2025-11-01')
+  assert.equal(r.months.length, 12)
+  assert.equal(r.total, 1920)
+  assert.equal(r.dividends, 1500)
+  assert.equal(r.interest, 300)
+  assert.equal(r.unspecified, 120)
+  assert.equal(r.months_paid, 3)
+  assert.equal(r.monthly_avg, 160)
+  assert.deepEqual(r.payers, [{ name: 'Acme', amount: 1500 }], 'two spellings of one payer are one payer')
+  assert.equal(investmentIncome([], {}), null)
+})
+
+test('income: the note decides the kind, and a payer name drops the dividend wording', () => {
+  assert.equal(kindOf('Credit interest'), 'interest')
+  assert.equal(kindOf('ITC'), 'dividends')
+  assert.equal(kindOf('  '), 'unspecified')
+  assert.equal(payerOf('PNB, Final DIV'), 'Pnb')
+  assert.equal(payerOf('dividend'), null)
 })

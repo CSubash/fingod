@@ -189,6 +189,10 @@ honest:
   (money invested counts as saved). Headline figures average the last three **complete** months, and a
   month with no transactions is skipped so a Wallet gap never reads as a month of saving everything.
   Runway is net worth divided by that monthly spend, once for liquid and once for total.
+- **Income from investments** (`compute/income.js`): every positive, non-transfer Wallet credit in the
+  "Interest, dividends" category, summed per month over the trailing 12 months (empty months kept). Wallet
+  has no finer field, so the note splits interest from dividends and a blank note stays "unspecified" instead
+  of being guessed. Cash received, not a yield, and no forecast.
 - **Capital gains** (`compute/gains.js`): FIFO lots from the ledger, long or short term by holding period,
   and a per-financial-year **estimate** of tax under the listed-securities rules after July 2024 (and the
   earlier rates for sales before 23 Jul 2024), before surcharge and cess. It sets losses off as the rules

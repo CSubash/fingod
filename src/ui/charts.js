@@ -72,7 +72,7 @@ export function lineChart({ series, height = 280, yFormat = String, xFormat, zer
 }
 
 /** periods: [{period, label, segments: {key: n}}]; keys in stacking order. */
-export function stackedBars({ periods, keys, color, height = 300, yFormat = String, title = '' }) {
+export function stackedBars({ periods, keys, color, height = 300, yFormat = String, title = '', link = true }) {
   if (!periods.length) return ''
   const pad = { l: 62, r: 12, t: 12, b: 28 }
   const totals = periods.map((p) => keys.reduce((s, k) => s + (p.segments[k] || 0), 0))
@@ -89,7 +89,7 @@ export function stackedBars({ periods, keys, color, height = 300, yFormat = Stri
     const segs = keys.filter((k) => p.segments[k] > 0).map((k) => {
       const v = p.segments[k], y0 = sy(acc + v), h = sy(acc) - y0
       acc += v
-      return `<rect data-period="${esc(p.period)}" data-label="${esc(k)}" x="${x.toFixed(1)}" y="${y0.toFixed(1)}" width="${w.toFixed(1)}" height="${Math.max(h - 1, 0.5).toFixed(1)}" fill="${color(k)}" style="cursor:pointer"><title>${esc(p.label)} · ${esc(k)} · ${esc(yFormat(v))}</title></rect>`
+      return `<rect ${link ? `data-period="${esc(p.period)}" data-label="${esc(k)}" ` : ''}x="${x.toFixed(1)}" y="${y0.toFixed(1)}" width="${w.toFixed(1)}" height="${Math.max(h - 1, 0.5).toFixed(1)}" fill="${color(k)}"${link ? ' style="cursor:pointer"' : ''}><title>${esc(p.label)} · ${esc(k)} · ${esc(yFormat(v))}</title></rect>`
     }).join('')
     const lab = i % step === 0 ? `<text x="${(x + w / 2).toFixed(1)}" y="${height - 8}" text-anchor="middle" fill="var(--muted)" font-size="11.5">${esc(p.label)}</text>` : ''
     return segs + lab

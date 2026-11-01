@@ -4,6 +4,7 @@
 import { ingestCheckpoint, ingestTransactions, ingestLedger, saveFixedDeposit, saveSplitwise, recordTrade, saveAsset } from './ingest.js'
 import { setSetting, write, first } from './db.js'
 import { DEFAULT_TARGET } from './compute/allocation.js'
+import { INCOME_CATEGORY_ID } from './compute/income.js'
 
 let seed = 11
 const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647
@@ -45,7 +46,7 @@ function checkpointFor(i, state) {
 function transactions() {
   const out = []
   let n = 0
-  const add = (date, amount, category, top, labels = [], note = '', extra = {}) => out.push({ id: `demo-${++n}`, txn_date: date, amount_inr: amount, account: 'Bank A', note, category, category_top: top, category_id: `c-${category}`, labels, is_transfer: false, ...extra })
+  const add = (date, amount, category, top, labels = [], note = '', extra = {}) => out.push({ id: `demo-${++n}`, txn_date: date, amount_inr: amount, account: 'Bank A', note, category, category_top: top, category_id: category === 'Interest, dividends' ? INCOME_CATEGORY_ID : `c-${category}`, labels, is_transfer: false, ...extra })
   for (let m = 0; m < 12; m++) {
     const d = (x) => `${new Date(Date.UTC(2025, 10 + m, 1)).toISOString().slice(0, 8)}${String(x).padStart(2, '0')}`
     add(d(1), 85000, 'Wage, invoices', 'Income', [], 'Salary') // untagged income: never an offset
@@ -57,6 +58,8 @@ function transactions() {
     add(d(12), -Math.round(1500 + rnd() * 4000), 'Clothes & shoes', 'Shopping', ['Shopping'], 'Shopping')
     add(d(15), -10000, 'Investments', 'Investments', ['Investment'], 'Mutual fund SIP')
     add(d(16), -5000, 'Transfer', 'Transfer', [], 'To savings', { is_transfer: true })
+    add(d(28), Math.round(300 + rnd() * 120), 'Interest, dividends', 'Income', [], 'Savings interest')
+    if (m % 3 === 1) add(d(18), [1800, 2600, 900, 3400][m % 4], 'Interest, dividends', 'Income', [], ['ACME dividend', 'Example Foods final div', 'Sample Power', 'ACME dividend'][m % 4])
     if (m % 4 === 1) add(d(20), -Math.round(5500 + rnd() * 3000), 'Holiday, trips', 'Life & Entertainment', ['Travel'], 'Weekend away')
   }
   // A trip split with friends: the outing is tagged Split + Beach Trip, and the friends' shares come back under the same label.
