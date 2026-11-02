@@ -14,8 +14,7 @@ export function holdingValue(h) {
   return num(h.qty) * num(h.price) * (h.fx_rate === undefined || h.fx_rate === null ? 1 : num(h.fx_rate))
 }
 
-export function computeNetWorth({ asOf, holdings, balances, fixedDeposits, ppf, assets = [] }) {
-  const sleeveSums = {}
+export function computeNetWorth({ asOf, holdings, balances, fixedDeposits, ppf, assets = [] }) {  const sleeveSums = {}
   let investments = 0
   for (const h of holdings) {
     const v = holdingValue(h)

@@ -6,6 +6,11 @@ import { daysBetween } from '../compute/num.js'
 
 const RANGE_LABEL = { '1w': '1 week', '1m': '1 month', '3m': '3 months', '1y': '1 year', all: 'All' }
 let range = '3m', open = null
+const hidden = new Set() // series keys switched off in the performance chart; kept across range changes
+
+// The portfolio and the two indices ride in the same chart as the sleeves: solid white for the whole portfolio,
+// dashed for each index, so the comparison is made on one axis.
+const MARKET_STYLE = { portfolio: { color: 'var(--ink)', dash: '' }, nifty50: { color: 'var(--ink-2)', dash: '7 5' }, sp500: { color: 'var(--muted)', dash: '2 5' } }
 
 let holdingsSort = { col: 'value', dir: 'desc' }
 
@@ -186,23 +191,22 @@ function incomeCard() {
   const kinds = INCOME_KINDS.filter(([k]) => i[k] > 0)
   const chart = stackedBars({
     periods: i.months.map((m) => ({ period: m.month, label: monthLabel(m.month), segments: Object.fromEntries(kinds.map(([k]) => [k, m[k]])) })),
-    keys: kinds.map(([k]) => k).reverse(),
-    color: (k) => (INCOME_KINDS.find(([id]) => id === k) || [])[2] || 'var(--cat-other)',
-    yFormat: compact,
-    title: 'Income from investments, last 12 months',
+    keys: kinds.map(([k]) => k).reverse(), color: (k) => INCOME_KINDS.find(([x]) => x === k)[2], yFormat: compact, title: 'Dividends and interest received by month', link: false,
   })
-  return `<section class="card"><header><h2>Income from investments - last 12 months</h2><span class="spacer"></span>
-    <span class="tag" style="font-size:15px;font-weight:600">${money(i.total)}</span></header>
-    ${kinds.length ? chart : '<p class="note" style="margin-top:0">No investment income recorded yet.</p>'}
-    <div class="legend">${kinds.map(([k, label, col]) => `<span><i class="swatch" style="background:${col}"></i>${esc(label)}: ${compact(i[k])}</span>`).join('')}</div>
-    <p class="note">Dividends and interest from your holdings and bank interest, read from your transactions. It excludes investment sales and transfers.</p></section>`
+  const stat = (label, value, sub) => `<div><div class="hero-label">${label}</div><div class="hero-figure" style="font-size:28px">${value}</div><div class="hero-secondary" style="margin-top:2px;font-size:13px">${sub}</div></div>`
+  return `<section class="card"><header><h2>Income from investments — last 12 months</h2></header>
+    <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:20px;margin-bottom:12px">
+      ${stat('Received', moneyExact(i.total), `${monthLabel(i.from)} to ${monthLabel(i.to)}`)}
+      ${stat('A month', compact(i.monthly_avg), `paid in ${i.months_paid} of 12 months`)}
+      ${stat('Dividends', compact(i.dividends), i.payers.length ? `from ${i.payers.length} payer${i.payers.length === 1 ? '' : 's'}` : 'none noted')}
+      ${stat('Interest', compact(i.interest), i.unspecified ? `plus ${compact(i.unspecified)} with no note` : 'bank and FD interest')}
+    </div>${chart}
+    <div class="legend">${kinds.map(([, l, c]) => `<span><i class="swatch" style="background:${c}"></i>${l}</span>`).join('')}</div>
+    ${i.payers.length ? `<div class="table-wrap" style="margin-top:12px"><table class="data"><thead><tr><th>Biggest dividend payers</th><th class="num">Received</th><th class="num">Share</th></tr></thead><tbody>${i.payers.slice(0, 8).map((p) => `<tr><td class="name">${esc(p.name)}</td><td class="num">${compact(p.amount)}</td><td class="num">${plain((p.amount / i.dividends) * 100, 0)}%</td></tr>`).join('')}</tbody></table></div>` : ''}
+    <p class="note">Everything Wallet files under "Interest, dividends", counted when the money arrived. A credit you never entered in Wallet is not here. Wallet has no field for which it was, so the split reads the note: "interest" or "FD" means interest, any other note is read as a dividend from that name, and a credit with no note is shown separately rather than guessed. This is cash received, not a yield, and it makes no forecast.</p></section>`
 }
 
-function xirrCell(x) {
-  if (!x || x.pct === null || x.pct === undefined) return '<span style="color:var(--muted)">-</span>'
-  const title = x.basis === 'ledger' ? 'Exact XIRR from trade ledger dates' : 'Estimated XIRR from checkpoints'
-  return `<span title="${esc(title)}">${delta(x.pct, (n) => `${plain(n, 1)}%`)}</span>`
-}
+const xirrCell = (x) => (x ? `${delta(x.pct, (n) => `${plain(n, 1)}%`)}<div style="color:var(--muted);font-size:12px">${x.basis === 'ledger' ? 'since first trade' : 'annualised'}</div>` : '—')
 
 function holdingsTable(s) {
   let list = [...s.holdings]
