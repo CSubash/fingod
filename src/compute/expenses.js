@@ -12,7 +12,7 @@
 //     reported as net_inflow rather than silently dropped.
 //   * Labels are many-to-many. Modifier labels (how it was paid, not what it
 //     was for) step aside when the record has any other label, then what is left
-//     shares the amount evenly — so the parts still sum to the whole.
+//     shares the amount evenly - so the parts still sum to the whole.
 import { money } from './num.js'
 
 export const UNTAGGED = 'Untagged'
@@ -24,11 +24,13 @@ export const TRANSFER_CATEGORY_ID = '5c5c4e21-00c8-8000-8000-000000000000' // Wa
 const PALETTE = 8 // distinguishable categorical hues; the ninth label folds into Other
 
 export function periodOf(date, granularity) {
+  if (granularity === 'all') return 'All time'
   if (granularity === 'week') {
     const d = new Date(`${date}T00:00:00Z`)
     d.setUTCDate(d.getUTCDate() - ((d.getUTCDay() + 6) % 7)) // Monday
     return d.toISOString().slice(0, 10)
   }
+  if (granularity === 'year') return `${date.slice(0, 4)}-01-01`
   return `${date.slice(0, 7)}-01`
 }
 
@@ -52,7 +54,7 @@ function effectiveLabels(labels) {
 
 /** The one computation the chart and the headline both read, so a bar and the
  * number above it can never disagree. Returns [{period, label, net}]. */
-export function labelNets(txns, labelsById, granularity = 'month', from, to) {
+export function labelNets(txns, labelsById, granularity = 'month', from, to, fallbackToCategory = false) {
   const cells = new Map()
   for (const t of txns) {
     const labels = labelsById.get(t.id) || []
@@ -62,7 +64,14 @@ export function labelNets(txns, labelsById, granularity = 'month', from, to) {
     if (!(amt > 0) && !tagged.length) continue // untagged income is not an offset
     const nonModifier = tagged.filter((l) => !MODIFIER_LABELS.includes(l))
     const effective = nonModifier.length ? nonModifier : tagged
-    const parts = effective.length ? effective : [UNTAGGED]
+    let parts
+    if (effective.length) {
+      parts = effective
+    } else if (fallbackToCategory) {
+      parts = [t.category_top || t.category || UNTAGGED]
+    } else {
+      parts = [UNTAGGED]
+    }
     const period = periodOf(t.txn_date, granularity)
     for (const label of parts) {
       const k = `${period}\0${label}`
@@ -75,8 +84,8 @@ export function labelNets(txns, labelsById, granularity = 'month', from, to) {
   })
 }
 
-export function expenseByLabel(txns, labelsById, granularity = 'month', from, to, top = PALETTE) {
-  const cells = labelNets(txns, labelsById, granularity, from, to)
+export function expenseByLabel(txns, labelsById, granularity = 'month', from, to, top = PALETTE, fallbackToCategory = false) {
+  const cells = labelNets(txns, labelsById, granularity, from, to, fallbackToCategory)
   const totals = new Map()
   for (const c of cells) if (c.net > 0 && c.label !== UNTAGGED) totals.set(c.label, (totals.get(c.label) || 0) + c.net)
   const ranked = [...totals.entries()].sort((a, b) => b[1] - a[1]).map(([l]) => l)

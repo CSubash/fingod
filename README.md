@@ -17,6 +17,8 @@ nothing to restart later. Each agent loads the project's MCP config its own way 
 `.gemini/settings.json`, `.pi/mcp.json`; all shipped in the repo), and asks you to approve or trust it once.
 
 ```bash
+# Antigravity
+git clone https://github.com/HarishTeens/fingod.git && cd fingod && python serve.py
 # Claude Code
 git clone https://github.com/HarishTeens/fingod.git && cd fingod && claude
 # Codex CLI
@@ -51,7 +53,9 @@ else also works: it clones the repo and tells you to restart inside the folder b
 ```bash
 git clone https://github.com/HarishTeens/fingod.git
 cd fingod
-python3 serve.py        # → http://localhost:8000
+
+# Run server:
+python serve.py         # Windows (or: python3 serve.py on macOS/Linux) → http://localhost:8000
 ```
 
 Open it and choose **Explore with demo data**, or go to `http://localhost:8000/?demo`. There is nothing to

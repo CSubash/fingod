@@ -8,8 +8,55 @@ a { color: inherit; }
 .app.wide { max-width: 980px; }
 input, select { background: var(--page); color: var(--ink); border: 1px solid var(--ring-strong); border-radius: 8px; padding: 8px 10px; font: inherit; font-size: 14px; width: 100%; }
 input:focus-visible { outline: 2px solid var(--ring-strong); outline-offset: 1px; }
-.btn.primary { background: var(--ink); color: var(--page); border-color: var(--ink); font-weight: 600; }
-.btn.primary:hover { opacity: .88; color: var(--page); }
+.btn.primary,
+#theme {
+  background: #ffffff;
+  color: #000000;
+  border: 1px solid #ffffff;
+  font-weight: 600;
+  text-decoration: none;
+}
+.btn.primary:hover,
+#theme:hover {
+  opacity: .88;
+  color: #000000;
+}
+:root[data-theme='light'] .btn.primary,
+[data-theme='light'] .btn.primary,
+:root[data-theme='light'] #theme,
+[data-theme='light'] #theme {
+  background: #000000;
+  color: #ffffff;
+  border-color: #000000;
+}
+:root[data-theme='light'] .btn.primary:hover,
+[data-theme='light'] .btn.primary:hover,
+:root[data-theme='light'] #theme:hover,
+[data-theme='light'] #theme:hover {
+  opacity: .88;
+  color: #ffffff;
+}
+
+button[data-range][aria-pressed='true'],
+button[data-gran][aria-pressed='true'],
+button[data-agent][aria-pressed='true'] {
+  background: #ffffff;
+  color: #000000;
+  border-color: #ffffff;
+  font-weight: 600;
+}
+
+:root[data-theme='light'] button[data-range][aria-pressed='true'],
+[data-theme='light'] button[data-range][aria-pressed='true'],
+:root[data-theme='light'] button[data-gran][aria-pressed='true'],
+[data-theme='light'] button[data-gran][aria-pressed='true'],
+:root[data-theme='light'] button[data-agent][aria-pressed='true'],
+[data-theme='light'] button[data-agent][aria-pressed='true'] {
+  background: #000000;
+  color: #ffffff;
+  border-color: #000000;
+  font-weight: 600;
+}
 .btn.big { padding: 10px 18px; font-size: 14px; border-radius: 10px; }
 .btn:disabled { opacity: .4; cursor: default; }
 

@@ -1,23 +1,35 @@
 import { trades, disposals } from '../repo.js'
 import { summarise, byPeriod } from '../compute/realised.js'
 import { recordTrade, deleteTrade, IngestError } from '../ingest.js'
-import { stackedBars } from './charts.js'
 import { compact, moneyExact, money, plain, pct, shortDate, monthLabel, sleeveLabel, delta, esc } from './format.js'
 import { daysBetween } from '../compute/num.js'
 
 let gran = 'month'
+let activeSleeves = new Set(['in_equity', 'in_mf', 'us_equity', 'btc'])
+let sortCol = 'exit_date'
+let sortDir = 'desc'
+let dropdownOpen = false
+let selectedPeriod = null
 
-function stat(label, value, sub = '') {
-  return `<div><div class="hero-label">${label}</div><div class="hero-figure" style="font-size:28px">${value}</div>${sub ? `<div class="hero-secondary" style="margin-top:2px;font-size:13px">${sub}</div>` : ''}</div>`
+const SLEEVE_FILTERS = [
+  { id: 'in_equity', label: 'IN Stocks' },
+  { id: 'in_mf', label: 'IN Mutual Funds' },
+  { id: 'us_equity', label: 'US Stocks' },
+  { id: 'btc', label: 'Bitcoin' },
+]
+
+function sortIcon(col) {
+  if (sortCol !== col) return `<span style="opacity:0.3;font-size:11px;margin-left:4px">↕</span>`
+  return `<span style="color:var(--ink);font-size:11px;margin-left:4px">${sortDir === 'asc' ? '▲' : '▼'}</span>`
 }
 
 function detected(d) {
   if (!d.disposals.length) return ''
   return `<section class="card" style="border-color:var(--ring-strong)"><header><h2>Sales detected between ${shortDate(d.between[0])} and ${shortDate(d.between[1])}</h2></header>
-    <p class="note" style="margin-top:0">A quantity that fell is a sale. A snapshot only sees what is still held, so the <b>price it sold at</b> is the one number it cannot know. The estimate uses the previous checkpoint's price — enter the real proceeds to record it.</p>
+    <p class="note" style="margin-top:0">A quantity that fell is a sale. A snapshot only sees what is still held, so the <b>price it sold at</b> is the one number it cannot know. The estimate uses the previous checkpoint's price - enter the real proceeds to record it.</p>
     <div class="table-wrap"><table class="data"><thead><tr><th>Position</th><th class="num">Sold</th><th class="num">Cost of shares sold</th><th class="num">Estimated proceeds</th><th class="num">Actual proceeds (₹)</th><th></th></tr></thead><tbody>
     ${d.disposals.map((x, i) => `<tr><td class="name">${esc(x.name || x.symbol)} <span class="tag">${esc(sleeveLabel(x.sleeve))}</span>${x.full_exit ? ' <span class="tag">full exit</span>' : ''}</td>
-      <td class="num">${plain(x.qty_sold, x.qty_sold % 1 ? 4 : 0)}</td><td class="num">${x.invested_sold === null ? '—' : money(x.invested_sold)}</td><td class="num">${money(x.estimated_proceeds)}</td>
+      <td class="num">${plain(x.qty_sold, x.qty_sold % 1 ? 4 : 0)}</td><td class="num">${x.invested_sold === null ? '-' : money(x.invested_sold)}</td><td class="num">${money(x.estimated_proceeds)}</td>
       <td class="num"><input id="proc-${i}" type="number" step="0.01" value="${x.estimated_proceeds}" style="width:120px"></td>
       <td><button class="btn" data-record="${i}" ${x.invested_sold === null ? 'disabled title="No cost basis to compute profit from"' : ''}>Record</button></td></tr>`).join('')}
     </tbody></table></div>
@@ -26,30 +38,215 @@ function detected(d) {
 
 export function render(el) {
   const draw = () => {
-    const ts = trades()
+    const allTs = trades()
+    const ts = allTs.filter((t) => activeSleeves.has(t.sleeve))
     const s = summarise(ts)
     const d = disposals()
     const periods = byPeriod([...ts].reverse(), gran)
+
+    // Filter trades if a period is selected
+    let displayedTrades = ts
+    if (selectedPeriod && gran !== 'all') {
+      displayedTrades = ts.filter((t) => {
+        if (gran === 'year') return (t.exit_date || '').startsWith(selectedPeriod.slice(0, 4))
+        return (t.exit_date || '').startsWith(selectedPeriod.slice(0, 7))
+      })
+    }
+
+    // Sort trades for the table
+    const sortedTrades = [...displayedTrades].sort((a, b) => {
+      let va, vb
+      if (sortCol === 'symbol') { va = a.symbol || ''; vb = b.symbol || ''; return sortDir === 'asc' ? va.localeCompare(vb) : vb.localeCompare(va) }
+      if (sortCol === 'sleeve') { va = sleeveLabel(a.sleeve); vb = sleeveLabel(b.sleeve); return sortDir === 'asc' ? va.localeCompare(vb) : vb.localeCompare(va) }
+      if (sortCol === 'exit_date') { va = a.exit_date || ''; vb = b.exit_date || ''; return sortDir === 'asc' ? va.localeCompare(vb) : vb.localeCompare(va) }
+      if (sortCol === 'holding_days') { va = a.holding_days ?? -1; vb = b.holding_days ?? -1 }
+      else if (sortCol === 'invested_inr') { va = Number(a.invested_inr); vb = Number(b.invested_inr) }
+      else if (sortCol === 'realised_inr') { va = Number(a.realised_inr); vb = Number(b.realised_inr) }
+      else if (sortCol === 'return_pct') {
+        va = a.invested_inr ? a.realised_inr / a.invested_inr : -999
+        vb = b.invested_inr ? b.realised_inr / b.invested_inr : -999
+      }
+      return sortDir === 'asc' ? va - vb : vb - va
+    })
+
+    // Realised profit value without triangle, colored red or green
+    const realisedValueStr = s.realised >= 0
+      ? `<span style="color:var(--good)">+${moneyExact(s.realised)}</span>`
+      : `<span style="color:var(--critical)">−${moneyExact(Math.abs(s.realised))}</span>`
+
+    const tableTitle = (gran === 'all' || !selectedPeriod)
+      ? `All trades (${sortedTrades.length})`
+      : `Trades (${sortedTrades.length})`
+
     el.innerHTML = `<div class="grid" style="gap:16px">${detected(d)}
-    <section class="card"><header><h2>Realised profit</h2></header>${ts.length ? `
-      <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:20px">
-        ${stat('Realised', delta(s.realised, moneyExact), `${s.return_pct === null ? '' : `${plain(s.return_pct)}% on ${compact(s.invested)} invested`}`)}
-        ${stat('Trades', s.trades, `${s.winners} won · ${s.losers} lost`)}
-        ${stat('Win rate', s.win_rate_pct === null ? '—' : `${s.win_rate_pct}%`)}
-        ${stat('Gross wins / losses', `${compact(s.gross_wins)} / ${compact(s.gross_losses)}`, 'never netted off')}
-        ${stat('Avg holding', s.avg_holding_days === null ? '—' : `${s.avg_holding_days} days`)}
+    <section class="card">
+      <header style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;position:relative">
+        <h2>Realised profit</h2>
+        <div class="dropdown" style="position:relative;display:inline-block">
+          <button class="btn" id="sleeve-dropdown-btn" type="button" style="display:inline-flex;align-items:center;gap:8px;font-size:13px">
+            <span>Sleeves (${activeSleeves.size}/${SLEEVE_FILTERS.length})</span>
+            <span style="font-size:10px">${dropdownOpen ? '▲' : '▼'}</span>
+          </button>
+          <div id="sleeve-dropdown-menu" style="display:${dropdownOpen ? 'block' : 'none'};position:absolute;right:0;top:calc(100% + 6px);background:var(--card);border:1px solid var(--ring-strong);border-radius:8px;box-shadow:0 12px 32px rgba(0,0,0,0.7);padding:12px 14px;z-index:200;min-width:180px;width:max-content">
+            <div style="display:flex;justify-content:space-between;align-items:center;gap:20px;padding-bottom:10px;margin-bottom:10px;border-bottom:1px solid var(--ring);font-size:12px">
+              <button type="button" data-action="select-all" style="background:none;border:none;color:var(--good);cursor:pointer;font-weight:600;padding:2px 4px">Select all</button>
+              <button type="button" data-action="clear-all" style="background:none;border:none;color:var(--muted);cursor:pointer;font-weight:600;padding:2px 4px">Clear all</button>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:10px">
+              ${SLEEVE_FILTERS.map((f) => `
+                <label style="display:flex;align-items:center;gap:10px;cursor:pointer;font-size:13px;white-space:nowrap;user-select:none;margin:0">
+                  <input type="checkbox" data-sleeve-filter="${f.id}" ${activeSleeves.has(f.id) ? 'checked' : ''} style="cursor:pointer;margin:0;width:15px;height:15px;flex-shrink:0">
+                  <span>${f.label}</span>
+                </label>
+              `).join('')}
+            </div>
+          </div>
+        </div>
+      </header>
+      ${ts.length ? `
+      <div style="display:flex;flex-wrap:wrap;gap:36px;align-items:flex-start;margin-top:16px">
+        <div style="min-width:260px;margin-right:8px">
+          <div class="hero-label">Realised</div>
+          <div class="hero-figure" style="font-size:28px;white-space:nowrap">${realisedValueStr}</div>
+          ${s.return_pct === null ? '' : `<div class="hero-secondary" style="margin-top:2px;font-size:13px">${plain(s.return_pct)}% on ${compact(s.invested)} invested</div>`}
+        </div>
+        <div style="min-width:110px">
+          <div class="hero-label">Trades</div>
+          <div class="hero-figure" style="font-size:28px">${s.trades}</div>
+          <div class="hero-secondary" style="margin-top:2px;font-size:13px">${s.winners} won · ${s.losers} lost</div>
+        </div>
+        <div style="min-width:110px">
+          <div class="hero-label">Win rate</div>
+          <div class="hero-figure" style="font-size:28px">${s.win_rate_pct === null ? '-' : `${s.win_rate_pct}%`}</div>
+        </div>
+        <div style="min-width:120px">
+          <div class="hero-label">Gross wins</div>
+          <div class="hero-figure" style="font-size:28px;color:var(--good)">${compact(s.gross_wins)}</div>
+          <div class="hero-secondary" style="margin-top:2px;font-size:13px">${s.winners} won</div>
+        </div>
+        <div style="min-width:120px">
+          <div class="hero-label">Gross losses</div>
+          <div class="hero-figure" style="font-size:28px;color:var(--critical)">${s.gross_losses === 0 ? '₹0' : `−${compact(Math.abs(s.gross_losses)).replace('−', '')}`}</div>
+          <div class="hero-secondary" style="margin-top:2px;font-size:13px">${s.losers} lost</div>
+        </div>
+        <div style="min-width:120px">
+          <div class="hero-label">Avg holding</div>
+          <div class="hero-figure" style="font-size:28px">${s.avg_holding_days === null ? '-' : `${s.avg_holding_days} days`}</div>
+          <div class="hero-secondary" style="margin-top:2px;font-size:13px">from buy to exit</div>
+        </div>
       </div>
-      <p class="note">Break-even counts as a loser: it consumed the position and returned nothing, and calling it a win would flatter the hit rate. Gross wins and gross losses are shown apart so a big win can't hide behind many small losses.</p>` : `<div class="empty">No realised trades yet. When a position's quantity falls between two checkpoints, it appears above for you to confirm.</div>`}</section>
-    ${ts.length ? `<section class="card"><header><h2>By ${gran}</h2><span class="spacer"></span><div class="tabs">${['month', 'year'].map((g) => `<button class="btn" data-gran="${g}" aria-pressed="${g === gran}">${g === 'month' ? 'Monthly' : 'Yearly'}</button>`).join(' ')}</div></header>
-      ${stackedBarsSigned(periods)}</section>
-    <section class="card"><header><h2>All trades</h2></header><div class="table-wrap"><table class="data"><thead><tr><th>Holding</th><th>Sleeve</th><th>Exited</th><th class="num">Held</th><th class="num">Invested</th><th class="num">Realised</th><th class="num">Return</th><th></th></tr></thead><tbody>
-      ${ts.map((t) => `<tr><td class="name">${esc(t.symbol)}</td><td>${esc(sleeveLabel(t.sleeve))}</td><td class="num">${shortDate(t.exit_date)}</td><td class="num">${t.holding_days === null ? '—' : `${t.holding_days}d`}</td><td class="num">${money(t.invested_inr)}</td><td class="num">${delta(t.realised_inr)}</td><td class="num">${t.invested_inr ? `${plain((t.realised_inr / t.invested_inr) * 100)}%` : '—'}</td><td><button class="btn" data-del="${t.id}" title="Remove this trade">✕</button></td></tr>`).join('')}
+      <p class="note" style="margin-top:18px">Break-even counts as a loser: it consumed the position and returned nothing, and calling it a win would flatter the hit rate. Gross wins and gross losses are shown apart so a big win can't hide behind many small losses.</p>` : `<div class="empty">No realised trades matching selected filters.</div>`}</section>
+    ${ts.length ? `<section class="card"><header><h2>By ${gran === 'all' ? 'All time' : gran === 'year' ? 'Year' : 'Month'}</h2><span class="spacer"></span>
+      <div class="tabs">${[
+        { id: 'month', label: 'Monthly' },
+        { id: 'year', label: 'Yearly' },
+        { id: 'all', label: 'All time' },
+      ].map((g) => `<button class="btn" data-gran="${g.id}" aria-pressed="${g.id === gran}">${g.label}</button>`).join(' ')}</div></header>
+      ${stackedBarsSigned(periods, gran, selectedPeriod)}</section>
+    <section class="card"><header style="display:flex;align-items:center;justify-content:space-between">
+      <h2>${tableTitle}</h2>
+      ${selectedPeriod && gran !== 'all' ? `<button class="btn" data-clear-period style="font-size:12px">${gran === 'year' ? selectedPeriod.slice(0, 4) : monthLabel(selectedPeriod)} ✕</button>` : ''}
+    </header><div class="table-wrap"><table class="data"><thead><tr>
+      <th style="cursor:pointer;user-select:none;text-align:center" data-sort="symbol">Stock ${sortIcon('symbol')}</th>
+      <th style="cursor:pointer;user-select:none;text-align:center" data-sort="sleeve">Sleeve ${sortIcon('sleeve')}</th>
+      <th style="cursor:pointer;user-select:none;text-align:center" data-sort="exit_date">Exited ${sortIcon('exit_date')}</th>
+      <th style="cursor:pointer;user-select:none;text-align:center" data-sort="holding_days">Held for ${sortIcon('holding_days')}</th>
+      <th style="cursor:pointer;user-select:none;text-align:center" data-sort="invested_inr">Invested ${sortIcon('invested_inr')}</th>
+      <th style="cursor:pointer;user-select:none;text-align:center" data-sort="realised_inr">Realised ${sortIcon('realised_inr')}</th>
+      <th style="cursor:pointer;user-select:none;text-align:center" data-sort="return_pct">Return ${sortIcon('return_pct')}</th>
+    </tr></thead><tbody>
+      ${sortedTrades.map((t) => `<tr>
+        <td style="text-align:center">${esc(t.symbol)}</td>
+        <td style="text-align:center">${esc(sleeveLabel(t.sleeve))}</td>
+        <td style="text-align:center">${shortDate(t.exit_date)}</td>
+        <td style="text-align:center">${t.holding_days === null ? '-' : `${t.holding_days}d`}</td>
+        <td style="text-align:center">${money(t.invested_inr)}</td>
+        <td style="text-align:center">${delta(t.realised_inr)}</td>
+        <td style="text-align:center">${t.invested_inr ? `${plain((t.realised_inr / t.invested_inr) * 100)}%` : '-'}</td>
+      </tr>`).join('')}
       </tbody></table></div></section>` : ''}</div>`
   }
   draw()
+
   el.addEventListener('click', (e) => {
-    const g = e.target.closest('[data-gran]'); if (g) { gran = g.dataset.gran; draw() }
-    const del = e.target.closest('[data-del]'); if (del && confirm('Remove this trade?')) { deleteTrade(Number(del.dataset.del)); draw() }
+    // Dropdown toggle
+    if (e.target.closest('#sleeve-dropdown-btn')) {
+      dropdownOpen = !dropdownOpen
+      draw()
+      return
+    }
+
+    // Select all / Clear all
+    const act = e.target.closest('[data-action]')
+    if (act) {
+      if (act.dataset.action === 'select-all') {
+        activeSleeves = new Set(SLEEVE_FILTERS.map((f) => f.id))
+      } else if (act.dataset.action === 'clear-all') {
+        activeSleeves.clear()
+      }
+      draw()
+      return
+    }
+
+    // Sleeve filter checkbox
+    const sFilter = e.target.closest('[data-sleeve-filter]')
+    if (sFilter) {
+      const sleeve = sFilter.dataset.sleeveFilter
+      if (activeSleeves.has(sleeve)) {
+        activeSleeves.delete(sleeve)
+      } else {
+        activeSleeves.add(sleeve)
+      }
+      draw()
+      return
+    }
+
+    // Close dropdown on outside click
+    if (dropdownOpen && !e.target.closest('.dropdown')) {
+      dropdownOpen = false
+      draw()
+      return
+    }
+
+    const sortTh = e.target.closest('[data-sort]')
+    if (sortTh) {
+      const col = sortTh.dataset.sort
+      if (sortCol === col) {
+        sortDir = sortDir === 'asc' ? 'desc' : 'asc'
+      } else {
+        sortCol = col
+        sortDir = ['symbol', 'sleeve'].includes(col) ? 'asc' : 'desc'
+      }
+      draw()
+      return
+    }
+
+    const bar = e.target.closest('rect[data-period]')
+    if (bar) {
+      const p = bar.dataset.period
+      if (gran === 'all' || p === 'All time') {
+        selectedPeriod = null
+      } else {
+        selectedPeriod = selectedPeriod === p ? null : p
+      }
+      draw()
+      return
+    }
+
+    if (e.target.closest('[data-clear-period]')) {
+      selectedPeriod = null
+      draw()
+      return
+    }
+
+    const g = e.target.closest('[data-gran]')
+    if (g) {
+      gran = g.dataset.gran
+      selectedPeriod = null
+      draw()
+      return
+    }
+
     const rec = e.target.closest('[data-record]')
     if (rec) {
       const d = disposals(), x = d.disposals[Number(rec.dataset.record)]
@@ -63,19 +260,50 @@ export function render(el) {
   })
 }
 
-/** Bars that can go below zero: wins above the axis, losses below. */
-function stackedBarsSigned(periods) {
+/** Bars: when all positive, baseline is at bottom so no empty negative space is drawn. */
+function stackedBarsSigned(periods, granularity = 'month', selectedPeriod = null) {
   if (!periods.length) return ''
   const W = 900, H = 260, pad = { l: 62, r: 12, t: 12, b: 28 }
-  const max = Math.max(...periods.map((p) => Math.abs(p.realised)), 1)
-  const mid = pad.t + (H - pad.t - pad.b) / 2, half = (H - pad.t - pad.b) / 2
+  const hasNeg = periods.some((p) => p.realised < 0)
+  const maxPos = Math.max(...periods.map((p) => Math.max(p.realised, 0)), 1)
+  const maxNeg = hasNeg ? Math.max(...periods.map((p) => Math.max(-p.realised, 0)), 0) : 0
+  const chartHeight = H - pad.t - pad.b
+
+  let midY, posScale, negScale
+  if (hasNeg) {
+    const totalSpan = maxPos + maxNeg
+    midY = pad.t + (maxPos / totalSpan) * chartHeight
+    posScale = (midY - pad.t) / maxPos
+    negScale = (H - pad.b - midY) / maxNeg
+  } else {
+    midY = H - pad.b
+    posScale = chartHeight / maxPos
+    negScale = 0
+  }
+
   const bw = (W - pad.l - pad.r) / periods.length
   const step = Math.ceil(periods.length / 12)
   const bars = periods.map((p, i) => {
-    const h = (Math.abs(p.realised) / max) * (half - 4), w = Math.min(bw * 0.68, 64), x = pad.l + i * bw + (bw - w) / 2
+    const w = Math.min(bw * 0.68, 64), x = pad.l + i * bw + (bw - w) / 2
     const up = p.realised >= 0
-    return `<rect x="${x.toFixed(1)}" y="${(up ? mid - h : mid).toFixed(1)}" width="${w.toFixed(1)}" height="${Math.max(h, 1).toFixed(1)}" rx="2" fill="var(--${up ? 'good' : 'critical'})"><title>${gran === 'year' ? p.period.slice(0, 4) : monthLabel(p.period)} · ${compact(p.realised)} · ${p.trades} trade${p.trades === 1 ? '' : 's'}</title></rect>` +
-      (i % step === 0 ? `<text x="${(x + w / 2).toFixed(1)}" y="${H - 8}" text-anchor="middle" fill="var(--muted)" font-size="11.5">${gran === 'year' ? p.period.slice(0, 4) : monthLabel(p.period)}</text>` : '')
+    let y, h
+    if (up) {
+      h = Math.max(p.realised * posScale, p.realised > 0 ? 2 : 0)
+      y = midY - h
+    } else {
+      h = Math.max(Math.abs(p.realised) * negScale, 2)
+      y = midY
+    }
+    const labelText = granularity === 'all' ? 'All time' : granularity === 'year' ? p.period.slice(0, 4) : monthLabel(p.period)
+    const isSelected = selectedPeriod && p.period === selectedPeriod
+    return `<rect data-period="${p.period}" x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${w.toFixed(1)}" height="${Math.max(h, 1).toFixed(1)}" rx="2" fill="var(--${up ? 'good' : 'critical'})" style="cursor:pointer;${isSelected ? 'outline:2px solid var(--ink);outline-offset:1px;' : ''}"><title>${labelText} · ${compact(p.realised)} · ${p.trades} trade${p.trades === 1 ? '' : 's'}</title></rect>` +
+      (i % step === 0 ? `<text x="${(x + w / 2).toFixed(1)}" y="${H - 8}" text-anchor="middle" fill="var(--muted)" font-size="11.5">${labelText}</text>` : '')
   }).join('')
-  return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;display:block"><line x1="${pad.l}" x2="${W - pad.r}" y1="${mid}" y2="${mid}" stroke="var(--baseline)"/><text x="${pad.l - 8}" y="${mid + 4}" text-anchor="end" fill="var(--muted)" font-size="11.5">₹0</text><text x="${pad.l - 8}" y="${pad.t + 10}" text-anchor="end" fill="var(--muted)" font-size="11.5">${compact(max)}</text><text x="${pad.l - 8}" y="${H - pad.b}" text-anchor="end" fill="var(--muted)" font-size="11.5">−${compact(max).replace('₹', '₹')}</text>${bars}</svg>`
+
+  const yLabels = `<line x1="${pad.l}" x2="${W - pad.r}" y1="${midY.toFixed(1)}" y2="${midY.toFixed(1)}" stroke="var(--baseline)"/>` +
+    `<text x="${pad.l - 8}" y="${(midY + 4).toFixed(1)}" text-anchor="end" fill="var(--muted)" font-size="11.5">₹0</text>` +
+    `<text x="${pad.l - 8}" y="${pad.t + 10}" text-anchor="end" fill="var(--muted)" font-size="11.5">${compact(maxPos)}</text>` +
+    (hasNeg && maxNeg > 0 ? `<text x="${pad.l - 8}" y="${H - pad.b}" text-anchor="end" fill="var(--muted)" font-size="11.5">−${compact(maxNeg).replace('−', '')}</text>` : '')
+
+  return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;display:block">${yLabels}${bars}</svg>`
 }

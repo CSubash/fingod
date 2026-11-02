@@ -97,7 +97,7 @@ export async function flush() { clearTimeout(saveTimer); await idbPut(db.export(
 export function onChange(fn) { listeners.push(fn); return () => { listeners = listeners.filter((l) => l !== fn) } }
 const notify = () => listeners.forEach((l) => { try { l() } catch (e) { console.error(e) } })
 
-/** Download the whole database as a file — a backup you can keep. */
+/** Download the whole database as a file - a backup you can keep. */
 export function exportBytes() { return db.export() }
 
 /** Replace the database with a backup file's bytes. */

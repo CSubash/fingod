@@ -122,7 +122,7 @@ export const MIGRATIONS = [
     imported_at TEXT NOT NULL
   );
   `,
-  // 2 — PPF: standing rows like fixed deposits, valued by formula at any date. The
+  // 2 - PPF: standing rows like fixed deposits, valued by formula at any date. The
   // government sets the rate every quarter, so each quarter's rate is its own row.
   `
   CREATE TABLE ppf_deposits (

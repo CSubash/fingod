@@ -2,7 +2,7 @@
 import { all, first, getSetting } from './db.js'
 import { computeNetWorth } from './compute/networth.js'
 import { allocate, DEFAULT_TARGET } from './compute/allocation.js'
-import { returns, fixedDepositReturns, ppfReturns } from './compute/returns.js'
+import { returns, fixedDepositReturns, ppfReturns, epfReturns } from './compute/returns.js'
 import { quarterStart } from './compute/ppf.js'
 import { findDisposals } from './compute/realised.js'
 import { money } from './compute/num.js'
@@ -59,7 +59,7 @@ export const RANGE_IDS = Object.keys(RANGES)
 
 // Which source owns which sleeve: a stale source is excluded from that period's
 // attribution rather than booked as a move to zero.
-const SOURCE_OF = { in_equity: ['kite', 'groww'], in_mf: ['kite'], gold: ['kite', 'groww'], debt: ['kite', 'groww'], us_equity: ['indmoney'], btc: ['manual', 'coinbase', 'binance'] }
+const SOURCE_OF = { in_equity: ['kite', 'groww'], in_mf: ['kite'], gold: ['kite', 'groww'], debt: ['kite', 'groww'], us_equity: ['indmoney'], btc: ['manual', 'coinbase', 'binance'], epf: ['indmoney'] }
 
 /** Sleeve returns and attribution between the latest checkpoint and the one a
  * range ago, plus a series for the indexed chart. */
@@ -90,7 +90,9 @@ export function investmentsView(range = '3m') {
   const fdSleeve = fds.length ? fixedDepositReturns(fds, latest.as_of_date, compared && compared.as_of_date) : null
   const ppf = ppfState()
   const ppfSleeve = ppf.deposits.length ? ppfReturns(ppf.deposits, ppf.rates, latest.as_of_date, compared && compared.as_of_date) : null
-  const sleeves = [...r.sleeves, ...[fdSleeve, ppfSleeve].filter((s) => s && s.holdings.length)].sort((a, b) => b.value - a.value)
+  const epfSleeve = epfReturns(balancesOf(latest.id), latest.as_of_date, compared ? balancesOf(compared.id) : null)
+  if (epfSleeve && stale('epf')) Object.assign(epfSleeve, { market: null, flow: null, fx: null, delta: null, stale: true })
+  const sleeves = [...r.sleeves, ...[fdSleeve, ppfSleeve, epfSleeve].filter((s) => s && s.holdings.length)].sort((a, b) => b.value - a.value)
 
   const inRange = cps.filter((c) => !compared || c.as_of_date >= compared.as_of_date)
   const series = inRange.map((c) => {
@@ -99,6 +101,7 @@ export function investmentsView(range = '3m') {
     const fd = fds.reduce((s, f) => s + (new Date(f.start_date) <= new Date(c.as_of_date) && !(f.closed_at && f.closed_at <= c.as_of_date) ? f.principal : 0), 0)
     if (fd) values.fd = money(fdSleeve ? fixedDepositReturns(fds, c.as_of_date, null).value : fd)
     if (ppfSleeve) { const v = ppfReturns(ppf.deposits, ppf.rates, c.as_of_date, null).value; if (v) values.ppf = v }
+    if (epfSleeve) { const v = epfReturns(balancesOf(c.id), c.as_of_date, null).value; if (v) values.epf = v }
     return { as_of: c.as_of_date, values }
   })
 
@@ -108,7 +111,13 @@ export function investmentsView(range = '3m') {
   const chain = inRange.map((c) => ({ c, h: holdingsOf(c.id) }))
   for (let i = 0; i < chain.length; i++) {
     const asOf = chain[i].c.as_of_date
-    if (i === 0) { for (const s of new Set(chain[0].h.map((x) => x.sleeve))) index[s] = [{ as_of: asOf, v: 100 }]; if (fds.length) index.fd = [{ as_of: asOf, v: 100 }]; if (ppfSleeve) index.ppf = [{ as_of: asOf, v: 100 }]; continue }
+    if (i === 0) {
+      for (const s of new Set(chain[0].h.map((x) => x.sleeve))) index[s] = [{ as_of: asOf, v: 100 }]
+      if (fds.length) index.fd = [{ as_of: asOf, v: 100 }]
+      if (ppfSleeve) index.ppf = [{ as_of: asOf, v: 100 }]
+      if (epfSleeve && epfSleeve.value) index.epf = [{ as_of: asOf, v: 100 }]
+      continue
+    }
     for (const s of bySleeve(diff(chain[i - 1].h, chain[i].h))) {
       if (!index[s.sleeve]) { index[s.sleeve] = [{ as_of: asOf, v: 100 }]; continue }
       const last = index[s.sleeve].at(-1).v
@@ -123,6 +132,13 @@ export function investmentsView(range = '3m') {
       const f = ppfReturns(ppf.deposits, ppf.rates, asOf, chain[i - 1].c.as_of_date)
       const prev = ppfReturns(ppf.deposits, ppf.rates, chain[i - 1].c.as_of_date, null).value
       index.ppf.push({ as_of: asOf, v: prev ? index.ppf.at(-1).v * (1 + f.market / prev) : index.ppf.at(-1).v })
+    }
+    if (index.epf) {
+      const epfNow = balancesOf(chain[i].c.id)
+      const epfPrev = balancesOf(chain[i - 1].c.id)
+      const f = epfReturns(epfNow, asOf, epfPrev)
+      const prev = epfReturns(epfPrev, chain[i - 1].c.as_of_date, null).value
+      index.epf.push({ as_of: asOf, v: prev ? index.epf.at(-1).v * (1 + (f.market + f.fx) / prev) : index.epf.at(-1).v })
     }
   }
 

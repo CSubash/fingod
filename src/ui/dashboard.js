@@ -1,7 +1,7 @@
 import { networthSeries, allocationNow, transactionsAll, labelsMap, transactionCount, disposals } from '../repo.js'
 import { expenseByLabel } from '../compute/expenses.js'
 import { lineChart, stackedBars, donut, sparkline } from './charts.js'
-import { compact, moneyExact, money, plain, shortDate, monthLabel, sleeveLabel, sleeveColor, labelColor, delta, esc } from './format.js'
+import { compact, moneyExact, money, plain, shortDate, monthLabel, sleeveLabel, sleeveColor, labelColor, categoryColor, delta, esc } from './format.js'
 
 const MONTHS_SHOWN = 12
 
@@ -20,7 +20,7 @@ function hero(series) {
       <div class="hero-label">Total net worth</div>
       <div class="hero-figure" style="font-size:32px">${moneyExact(latest.total)}</div>
       <div class="hero-secondary">${compact(latest.epf)} EPF · ${latest.ppf ? `${compact(latest.ppf)} PPF · ` : ''}${compact(latest.fd_accrued)} accrued FD interest · ${compact(latest.splitwise)} owed to you</div>
-      <div class="hero-secondary" style="color:var(--muted);font-size:13px">Cash ${compact(latest.cash)} · cards ${compact(latest.credit_card)} outstanding · as of ${shortDate(latest.as_of_date)}</div>
+      <div class="hero-secondary" style="color:var(--muted);font-size:13px">Cash ${compact(latest.cash)} · Cards ${compact(latest.credit_card)} outstanding · As of ${shortDate(latest.as_of_date)}</div>
     </div>
   </div></section>`
 }
@@ -30,15 +30,16 @@ function networthCard(series) {
   const chart = lineChart({
     series: [{ label: 'Total', color: 'var(--ink)', points: pts('total'), endLabel: compact(series.at(-1).total) }, { label: 'Liquid', color: 'var(--sleeve-in_equity)', points: pts('liquid'), endLabel: compact(series.at(-1).liquid) }],
     yFormat: compact, xFormat: (ms) => shortDate(new Date(ms).toISOString().slice(0, 10)), zeroBased: true, height: 560, title: 'Net worth over time',
+    fontSize: 15,
   })
   return `<section class="card"><header><h2>Net worth</h2></header>${chart}
-    <div class="legend"><span><i class="swatch" style="background:var(--ink)"></i>Total</span><span><i class="swatch" style="background:var(--sleeve-in_equity)"></i>Liquid</span></div>
+    <div class="legend" style="font-size:15px"><span><i class="swatch" style="background:var(--ink)"></i>Total</span><span><i class="swatch" style="background:var(--sleeve-in_equity)"></i>Liquid</span></div>
     <p class="note">Total includes EPF, PPF, accrued FD interest and Splitwise receivables. Liquid is what could actually be turned into money.</p></section>`
 }
 
 function allocationCard(a) {
   if (!a) return ''
-  const rows = a.rows.filter((r) => r.value > 0)
+  const rows = (a.actual || a.rows).filter((r) => r.value > 0)
   return `<section class="card"><header><h2>Allocation</h2></header>
     ${donut({ rows: rows.slice().sort((a, b) => b.value - a.value).map((r) => ({ key: r.sleeve, label: sleeveLabel(r.sleeve), value: r.value, color: sleeveColor(r.sleeve) })) })}
     <table class="data" style="margin-top:16px"><tbody>${rows.slice().sort((a, b) => b.value - a.value).map((r) => `<tr><td class="name"><i class="swatch" style="background:${sleeveColor(r.sleeve)}"></i>${esc(sleeveLabel(r.sleeve))}</td><td class="num">${plain(r.share_pct, 1)}%</td><td class="num">${compact(r.value)}</td></tr>`).join('')}</tbody></table></section>`
@@ -46,22 +47,29 @@ function allocationCard(a) {
 
 function spendCard() {
   if (!transactionCount()) return `<section class="card"><header><h2>Monthly spend by label</h2></header><div class="empty">No expenses yet. Connect Wallet to see where your money goes.<br><a href="#/welcome" class="btn" style="display:inline-block;margin-top:12px">Connect Wallet</a></div></section>`
-  const { labels, series } = expenseByLabel(transactionsAll(), labelsMap(), 'month')
+  const txns = transactionsAll(), labels = labelsMap()
+  const byLabel = expenseByLabel(txns, labels, 'month', undefined, undefined, 8, false)
+  const isAllUntagged = !byLabel.labels.length || byLabel.labels.every((l) => l === 'Untagged')
+  const { labels: names, series } = isAllUntagged
+    ? expenseByLabel(txns, labels, 'month', undefined, undefined, 8, true)
+    : byLabel
+  const title = isAllUntagged ? 'Monthly spend by category' : 'Monthly spend by label'
+  const color = isAllUntagged ? categoryColor : labelColor
   const recent = series.slice(-MONTHS_SHOWN)
-  const chart = stackedBars({ periods: recent.map((p) => ({ ...p, label: monthLabel(p.period) })), keys: labels.slice().reverse(), color: labelColor, yFormat: compact, title: 'Monthly spend by label' })
-  return `<section class="card"><header><h2>Monthly spend by label</h2><span class="spacer"></span><a class="btn" href="#/expenses">Explore</a></header>${chart}
-    <div class="legend">${labels.map((l) => `<span><i class="swatch" style="background:${labelColor(l)}"></i>${esc(l)}</span>`).join('')}</div>
-    <p class="note">Net of money that came back: income tagged with the same label is subtracted, so a bar is what something <i>cost</i> you. Transfers between your own accounts and Investments are excluded.</p></section>`
+  const chart = stackedBars({ periods: recent.map((p) => ({ ...p, label: monthLabel(p.period) })), keys: names.slice().reverse(), color, yFormat: compact, title })
+  return `<section class="card"><header><h2>${title}</h2><span class="spacer"></span><a class="btn" href="#/expenses">Explore</a></header>${chart}
+    <div class="legend">${names.map((l) => `<span><i class="swatch" style="background:${color(l)}"></i>${esc(l)}</span>`).join('')}</div>
+    <p class="note">${isAllUntagged ? 'Spend grouped by category. Transfers between your own accounts and Investments are excluded.' : 'Net of money that came back: income tagged with the same label is subtracted, so a bar is what something <i>cost</i> you. Transfers between your own accounts and Investments are excluded.'}</p></section>`
 }
 
 function rebalanceCard(a) {
   if (!a) return ''
-  return `<section class="card"><header><h2>Rebalance</h2><span class="spacer"></span><a class="btn" href="#/data">Edit targets</a></header>
+  return `<section class="card"><header><h2>Rebalance</h2><span class="spacer"></span><a class="btn primary" href="#/data">Edit targets</a></header>
     <div class="table-wrap"><table class="data"><thead><tr><th>Sleeve</th><th>Actual vs target</th><th class="num">Share</th><th class="num">Target</th><th class="num">Drift</th><th class="num">To move</th></tr></thead><tbody>
     ${a.rows.map((r) => `<tr><td class="name"><i class="swatch" style="background:${sleeveColor(r.sleeve)}"></i>${esc(sleeveLabel(r.sleeve))}</td>
       <td style="min-width:130px"><span class="minibar" style="position:relative"><span style="width:${Math.min(r.share_pct, 100)}%;background:${sleeveColor(r.sleeve)}"></span><i style="position:absolute;top:-3px;bottom:-3px;width:2px;background:var(--ink);left:${Math.min(r.target_pct, 100)}%"></i></span></td>
       <td class="num">${plain(r.share_pct, 1)}%</td><td class="num">${plain(r.target_pct, 1)}%</td><td class="num">${delta(r.drift_pp, (v) => `${plain(v, 1)}pp`)}</td>
-      <td class="num">${r.to_move === 0 ? '—' : `${r.to_move > 0 ? 'buy' : 'sell'} ${compact(Math.abs(r.to_move))}`}</td></tr>`).join('')}
+      <td class="num">${r.to_move === 0 ? '-' : `${r.to_move > 0 ? 'buy' : 'sell'} ${compact(Math.abs(r.to_move))}`}</td></tr>`).join('')}
     </tbody></table></div>
     <p class="note">Marker = target. The target's own keys define the base: remove a sleeve you can't rebalance (EPF, say) and it leaves the denominator too.${Object.keys(a.untargeted).length ? ` Outside the target: ${Object.entries(a.untargeted).map(([k, v]) => `${sleeveLabel(k)} ${compact(v)}`).join(', ')}.` : ''}</p></section>`
 }

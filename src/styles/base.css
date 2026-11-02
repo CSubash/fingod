@@ -12,7 +12,7 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
-/* tabular-nums on table columns and axis ticks only — not on prose, and not on
+/* tabular-nums on table columns and axis ticks only - not on prose, and not on
  * the hero figure, where proportional digits read better at display size. */
 .tnum { font-variant-numeric: tabular-nums; }
 
@@ -72,6 +72,7 @@ body {
   border: 1px solid var(--ring); border-radius: 8px;
   padding: 4px 10px; font-size: 12px; cursor: pointer;
   font-family: inherit;
+  text-decoration: none;
 }
 .btn:hover { border-color: var(--ring-strong); color: var(--ink); }
 .btn[aria-pressed='true'] { color: var(--ink); border-color: var(--ring-strong); }
@@ -87,7 +88,7 @@ table.data th {
   font-size: 12px; text-transform: uppercase; letter-spacing: 0.02em;
   padding: 6px 10px 8px; border-bottom: 1px solid var(--gridline);
   /* A wrapped header pushes its own row to two lines and drags every other
-     column's baseline with it. Wide tables scroll instead — see .table-wrap. */
+     column's baseline with it. Wide tables scroll instead - see .table-wrap. */
   white-space: nowrap;
 }
 table.data td {
@@ -158,7 +159,7 @@ tr.picked .name { color: var(--ink); font-weight: 600; }
   margin-right: 9px; flex: none;
 }
 
-/* Proportion, not precision — the number is in the next column. */
+/* Proportion, not precision - the number is in the next column. */
 .minibar {
   display: block; height: 6px; border-radius: 3px;
   background: var(--gridline); overflow: hidden;

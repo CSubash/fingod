@@ -1,9 +1,9 @@
 // Actual allocation against targets. The target's own keys define the base:
 // remove a line from the target and it leaves the denominator too, with no code
-// change — which is the escape hatch for EPF, a sleeve you cannot rebalance.
-import { money, num } from './num.js'
+// change - which is the escape hatch for sleeves you choose not to rebalance.
+import { money, num, sum } from './num.js'
 
-export const DEFAULT_TARGET = { in_equity: 27, in_mf: 35, us_equity: 10, gold: 5, btc: 5, fd: 15, debt: 2, liquid: 1 }
+export const DEFAULT_TARGET = { in_equity: 25, in_mf: 30, us_equity: 10, gold: 5, btc: 5, fd: 10, debt: 2, liquid: 1, epf: 7, ppf: 5 }
 
 export function allocate(nw, target) {
   const values = { ...nw.sleeves }
@@ -27,5 +27,16 @@ export function allocate(nw, target) {
   })
   const untargeted = {}
   for (const [k, v] of Object.entries(values)) if (!(k in target) && v) untargeted[k] = money(v)
-  return { as_of_date: nw.as_of_date, base: money(base), rows, untargeted }
+
+  const totalVal = sum(Object.values(values).filter((v) => v > 0))
+  const actual = Object.entries(values)
+    .filter(([_, v]) => v > 0)
+    .map(([sleeve, val]) => ({
+      sleeve,
+      value: money(val),
+      share_pct: totalVal ? money((val / totalVal) * 100) : 0,
+    }))
+    .sort((a, b) => b.value - a.value)
+
+  return { as_of_date: nw.as_of_date, base: money(base), rows, untargeted, actual }
 }

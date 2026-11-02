@@ -1,7 +1,6 @@
 # Onboarding
 
-This is the script for setting fingod up with a new user. **You are their coding agent** (Claude Code,
-Codex CLI, Gemini CLI, Pi or similar) and this happens in their terminal. The browser only shows the result; it
+This is the script for setting fingod up with a new user. **You are their coding agent** (Claude Code, Antigravity, Codex CLI, Gemini CLI, Pi or similar) and this happens in their terminal. The browser only shows the result; it
 does not guide anything, and **you open it once, at the very end** (§7), when there is data to show.
 
 > **Read-only.** Never place, modify or cancel an order. Kite's MCP server exposes order and GTT tools;
@@ -13,7 +12,7 @@ does not guide anything, and **you open it once, at the very end** (§7), when t
 Onboarding should feel like filling in a short form, not like an interview. Whenever the answer is a **choice**,
 make it **selectable**, and let the user **submit** a whole round at once.
 
-- **Use your structured question tool** if you have one. In Claude Code that is `AskUserQuestion`: it shows
+- **Use your structured question tool** if you have one. In Claude Code that is `AskUserQuestion`, and in Antigravity that is `ask_question`: it shows
   selectable options, lets you batch **up to 4 questions per call** with **2 to 4 options each**, supports
   `multiSelect` where several answers apply, and adds an "Other" box on its own. Give each option a short
   description, put the recommended option first and label it "(Recommended)", and keep headers to a word or two.

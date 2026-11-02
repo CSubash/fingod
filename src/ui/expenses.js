@@ -1,16 +1,34 @@
 import { transactionsAll, labelsMap, transactionCount } from '../repo.js'
 import { expenseByLabel, breakdown, listTransactions, UNTAGGED } from '../compute/expenses.js'
 import { stackedBars } from './charts.js'
-import { compact, moneyExact, money, plain, shortDate, monthLabel, labelColor, esc } from './format.js'
+import { compact, moneyExact, money, plain, shortDate, monthLabel, labelColor, categoryColor, CATEGORY_COLORS, esc } from './format.js'
 
 let gran = 'month'
 const drill = { period: null, category: null, subcategory: null, label: null }
 
-const periodLabel = (p) => (gran === 'week' ? `Week of ${shortDate(p)}` : monthLabel(p))
+const periodLabel = (p) => (gran === 'all' ? 'All time' : gran === 'week' ? `Week of ${shortDate(p)}` : gran === 'year' ? p.slice(0, 4) : monthLabel(p))
 
-function readHash() {
+function readHash(allLabelNames) {
   const q = new URLSearchParams(location.hash.split('?')[1] || '')
-  if (q.get('period')) { drill.period = q.get('period'); drill.label = q.get('label'); drill.category = drill.subcategory = null }
+  if (q.get('period')) {
+    drill.period = q.get('period')
+    const val = q.get('label')
+    const cat = q.get('category') || q.get('cat')
+    if (cat) {
+      drill.category = cat
+      drill.label = drill.subcategory = null
+    } else if (val) {
+      if (allLabelNames && !allLabelNames.has(val)) {
+        drill.category = val === UNTAGGED ? null : val
+        drill.label = drill.subcategory = null
+      } else {
+        drill.label = val
+        drill.category = drill.subcategory = null
+      }
+    } else {
+      drill.label = drill.category = drill.subcategory = null
+    }
+  }
 }
 
 function list(title, rows, total, picked, attr, colorFor) {
@@ -21,12 +39,21 @@ function list(title, rows, total, picked, attr, colorFor) {
 }
 
 export function render(el) {
-  readHash()
   if (!transactionCount()) { el.innerHTML = `<div class="empty">No transactions yet.<br>Connect Wallet from <a href="#/welcome" style="color:var(--ink)">the setup guide</a> and your expenses appear here.</div>`; return }
   const txns = transactionsAll(), labels = labelsMap()
+  const allLabelNames = new Set()
+  for (const arr of labels.values()) {
+    for (const l of arr) allLabelNames.add(l)
+  }
+  readHash(allLabelNames)
   const draw = () => {
-    const { labels: names, series } = expenseByLabel(txns, labels, gran)
-    const shown = series.slice(gran === 'week' ? -26 : -24)
+    const byLabelCheck = expenseByLabel(txns, labels, gran, undefined, undefined, 12, false)
+    const hasLabels = byLabelCheck.labels.length > 0 && !byLabelCheck.labels.every((l) => l === UNTAGGED)
+    const { labels: names, series } = hasLabels
+      ? byLabelCheck
+      : expenseByLabel(txns, labels, gran, undefined, undefined, 12, true)
+    const color = hasLabels ? labelColor : categoryColor
+    const shown = gran === 'all' ? series : series.slice(gran === 'week' ? -26 : gran === 'year' ? -10 : -24)
     const base = { period: drill.period, granularity: gran, label: drill.label }
     const byCat = breakdown(txns, labels, { ...base, by: 'category', category: drill.category })
     const byLabel = breakdown(txns, labels, { period: drill.period, granularity: gran, by: 'label', category: drill.category, subcategory: drill.subcategory })
@@ -36,27 +63,63 @@ export function render(el) {
       drill.category && { text: drill.category, on: () => { drill.subcategory = null } },
       drill.subcategory && { text: drill.subcategory },
     ].filter(Boolean)
+
+    const granTitle = gran === 'all' ? 'All time' : gran === 'week' ? 'Weekly' : gran === 'year' ? 'Yearly' : 'Monthly'
+    const spendTitle = `${granTitle} spend by ${hasLabels ? 'label' : 'category'}`
+
+    const onlyUntagged = !byLabel.rows.length || byLabel.rows.every((r) => r.key === UNTAGGED)
+    const catCard = list(drill.category ? `${esc(drill.category)} - subcategories` : 'Categories', byCat.rows, byCat.total, drill.subcategory || drill.category, 'cat', categoryColor)
+    const labelCard = onlyUntagged ? '' : list('Labels', byLabel.rows, byLabel.total, drill.label, 'label', labelColor)
+    const middleSection = onlyUntagged ? catCard : `<div class="grid cols-2">${catCard}${labelCard}</div>`
+
     el.innerHTML = `<div class="grid" style="gap:16px">
-    <section class="card"><header><h2>${gran === 'week' ? 'Weekly' : 'Monthly'} spend by label</h2><span class="spacer"></span><div class="tabs">${['week', 'month'].map((g) => `<button class="btn" data-gran="${g}" aria-pressed="${g === gran}">${g === 'week' ? 'Weekly' : 'Monthly'}</button>`).join(' ')}</div></header>
-      ${stackedBars({ periods: shown.map((p) => ({ ...p, label: gran === 'week' ? shortDate(p.period) : monthLabel(p.period) })), keys: names.slice().reverse(), color: labelColor, yFormat: compact, title: 'Spend by label' })}
-      <div class="legend">${names.map((l) => `<span><i class="swatch" style="background:${labelColor(l)}"></i>${esc(l)}</span>`).join('')}</div>
+    <section class="card"><header><h2>${spendTitle}</h2><span class="spacer"></span>
+      <div class="tabs">${[
+        { id: 'week', label: 'Weekly' },
+        { id: 'month', label: 'Monthly' },
+        { id: 'year', label: 'Yearly' },
+        { id: 'all', label: 'All time' },
+      ].map((g) => `<button class="btn" data-gran="${g.id}" aria-pressed="${g.id === gran}">${g.label}</button>`).join(' ')}</div></header>
+      ${stackedBars({ periods: shown.map((p) => ({ ...p, label: gran === 'all' ? 'All time' : gran === 'week' ? shortDate(p.period) : gran === 'year' ? p.period.slice(0, 4) : monthLabel(p.period) })), keys: names.slice().reverse(), color, yFormat: compact, title: spendTitle })}
+      <div class="legend">${names.map((l) => `<span><i class="swatch" style="background:${color(l)}"></i>${esc(l)}</span>`).join('')}</div>
       <p class="note">Click a bar to drill into that period. Bars are net of money that came back under the same label; transfers between your own accounts and Investments are excluded.</p></section>
     <section class="card" style="padding:14px 22px"><div class="crumbs">${crumbs.map((c, i) => `${i ? '<span class="sep">›</span>' : ''}${i < crumbs.length - 1 ? `<button class="crumb" data-crumb="${i}">${esc(c.text)}</button>` : `<span class="crumb current">${esc(c.text)}</span>`}`).join('')}
-      ${drill.label ? `<button class="btn" style="margin-left:10px" data-clear-label>label: ${esc(drill.label)} ✕</button>` : ''}${drill.period ? '<button class="btn" style="margin-left:auto" data-reset>Clear</button>' : ''}</div></section>
-    <div class="grid cols-2">${list(drill.category ? `${esc(drill.category)} — subcategories` : 'Categories', byCat.rows, byCat.total, drill.subcategory || drill.category, 'cat', null)}${list('Labels', byLabel.rows, byLabel.total, drill.label, 'label', labelColor)}</div>
+      ${drill.label ? `<button class="btn" style="margin-left:10px" data-clear-label>label: ${esc(drill.label)} ✕</button>` : ''}
+      ${drill.category ? `<button class="btn" style="margin-left:10px" data-clear-cat>category: ${esc(drill.category)} ✕</button>` : ''}
+      ${drill.period || drill.label || drill.category ? '<button class="btn" style="margin-left:auto" data-reset>Clear</button>' : ''}</div></section>
+    ${middleSection}
     <section class="card"><header><h2>Transactions</h2><span class="spacer"></span><span class="hero-label">${rows.length === 60 ? 'latest 60' : `${rows.length}`}</span></header><div class="table-wrap"><table class="data"><tbody>
-      ${rows.map((t) => `<tr><td class="num" style="text-align:left;white-space:nowrap">${shortDate(t.txn_date)}</td><td class="name">${esc(t.note || t.category || '—')}<div style="color:var(--muted);font-size:12px">${esc(t.category_top || '')}${t.category ? ` · ${esc(t.category)}` : ''} · ${esc(t.account || '')}</div></td><td>${t.labels.map((l) => `<span class="tag">${esc(l)}</span>`).join('')}</td><td class="num">${moneyExact(-t.amount_inr)}</td></tr>`).join('') || '<tr><td class="empty">No transactions.</td></tr>'}
+      ${rows.map((t) => {
+        const tagHtml = t.labels.length
+          ? t.labels.map((l) => `<span class="tag" style="border-left:3px solid ${labelColor(l)};padding-left:6px">${esc(l)}</span>`).join(' ')
+          : `<span class="tag" style="border-left:3px solid ${categoryColor(t.category)};padding-left:6px">${esc(t.category || 'Untagged')}</span>`
+        return `<tr><td class="num" style="text-align:left;white-space:nowrap">${shortDate(t.txn_date)}</td>
+          <td class="name">${esc(t.note || t.category || '-')}<div style="color:var(--muted);font-size:12px">${esc(t.category_top || '')}${t.category ? ` · ${esc(t.category)}` : ''} · ${esc(t.account || '')}</div></td>
+          <td>${tagHtml}</td>
+          <td class="num">${moneyExact(-t.amount_inr)}</td></tr>`
+      }).join('') || '<tr><td class="empty">No transactions.</td></tr>'}
       </tbody></table></div></section></div>`
     el._crumbs = crumbs
   }
   draw()
   el.addEventListener('click', (e) => {
     const g = e.target.closest('[data-gran]'); if (g) { gran = g.dataset.gran; Object.assign(drill, { period: null, category: null, subcategory: null }); return draw() }
-    const bar = e.target.closest('rect[data-period]'); if (bar) { Object.assign(drill, { period: bar.dataset.period, label: bar.dataset.label === UNTAGGED ? UNTAGGED : bar.dataset.label, category: null, subcategory: null }); return draw() }
+    const bar = e.target.closest('rect[data-period]');
+    if (bar) {
+      const k = bar.dataset.label
+      const isLabel = allLabelNames.has(k)
+      if (isLabel) {
+        Object.assign(drill, { period: bar.dataset.period, label: k === UNTAGGED ? UNTAGGED : k, category: null, subcategory: null })
+      } else {
+        Object.assign(drill, { period: bar.dataset.period, label: null, category: k === UNTAGGED ? null : k, subcategory: null })
+      }
+      return draw()
+    }
     const cat = e.target.closest('[data-cat]'); if (cat) { if (!drill.category) drill.category = cat.dataset.cat; else drill.subcategory = cat.dataset.cat; return draw() }
     const lab = e.target.closest('[data-label]'); if (lab) { drill.label = drill.label === lab.dataset.label ? null : lab.dataset.label; return draw() }
     const crumb = e.target.closest('[data-crumb]'); if (crumb) { el._crumbs[Number(crumb.dataset.crumb)].on?.(); return draw() }
     if (e.target.closest('[data-clear-label]')) { drill.label = null; return draw() }
+    if (e.target.closest('[data-clear-cat]')) { drill.category = null; drill.subcategory = null; return draw() }
     if (e.target.closest('[data-reset]')) { Object.assign(drill, { period: null, category: null, subcategory: null, label: null }); return draw() }
   })
 }

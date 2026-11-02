@@ -1,4 +1,4 @@
-// Fixed-deposit interest, valued by formula at any date — so a deposit entered
+// Fixed-deposit interest, valued by formula at any date - so a deposit entered
 // today still prices correctly at checkpoints taken before it existed.
 import { num, money, dayMs, daysBetween } from './num.js'
 

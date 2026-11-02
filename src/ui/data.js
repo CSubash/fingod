@@ -6,6 +6,17 @@ import { isDemo } from '../demo.js'
 import { esc, shortDate, money, sleeveLabel } from './format.js'
 import * as manual from './manual.js'
 
+let checkpointCollapsed = true
+let whatsHereCollapsed = true
+let importCollapsed = true
+let backupCollapsed = true
+
+function chevron(collapsed) {
+  return collapsed
+    ? `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="display:block"><polyline points="6 9 12 15 18 9"></polyline></svg>`
+    : `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="display:block"><polyline points="6 15 12 9 18 15"></polyline></svg>`
+}
+
 async function copy(text, btn) {
   try { await navigator.clipboard.writeText(text) } catch { const t = document.createElement('textarea'); t.value = text; document.body.appendChild(t); t.select(); document.execCommand('copy'); t.remove() }
   const old = btn.textContent; btn.textContent = 'Copied ✓'; setTimeout(() => (btn.textContent = old), 1800)
@@ -16,37 +27,79 @@ export function render(el) {
   const draw = (log = failureLog()) => {
     const cps = checkpoints(), st = connectorStatus()
     el.innerHTML = `<div class="grid" style="gap:16px;max-width:860px">
-    <section class="card"><header><h2>Take a checkpoint</h2></header>
-      <p class="hero-secondary" style="margin-top:0">Paste this into your coding agent whenever you want fresh numbers. It reads each source you connected and drops files into <code>data/</code>; they import here automatically.</p>
-      <div class="prompt"><pre id="p-cp">${esc(checkpointPrompt)}</pre><button class="btn primary" data-copy="p-cp">Copy prompt</button></div></section>
+    <section class="card" style="${checkpointCollapsed ? 'padding: 18px 22px;' : ''}">
+      <header style="display:flex;align-items:center;justify-content:space-between;cursor:pointer;user-select:none;margin:${checkpointCollapsed ? '0' : '0 0 14px'};" data-toggle-cp>
+        <h2>Take a checkpoint</h2>
+        <span style="display:inline-flex;align-items:center;justify-content:center;color:var(--muted);user-select:none;padding:4px" title="${checkpointCollapsed ? 'Expand Take a checkpoint' : 'Collapse Take a checkpoint'}">${chevron(checkpointCollapsed)}</span>
+      </header>
+      <div style="display:${checkpointCollapsed ? 'none' : 'block'};margin-top:10px">
+        <p class="hero-secondary" style="margin-top:0">Paste this into your coding agent whenever you want fresh numbers. It reads each source you connected and drops files into <code>data/</code>; they import here automatically.</p>
+        <div class="prompt"><pre id="p-cp">${esc(checkpointPrompt)}</pre><button class="btn primary" data-copy="p-cp">Copy prompt</button></div>
+      </div>
+    </section>
 
-    <section class="card"><header><h2>What's here</h2><span class="spacer"></span><a class="btn" href="#/welcome">Connect more</a></header>
-      <table class="data"><tbody>
-        <tr><td class="name">Checkpoints</td><td class="num">${cps.length}${cps.length ? ` · latest ${shortDate(cps.at(-1).as_of_date)}` : ''}</td></tr>
-        <tr><td class="name">Wallet transactions</td><td class="num">${transactionCount().toLocaleString('en-IN')}</td></tr>
-        <tr><td class="name">Fixed deposits</td><td class="num">${fixedDeposits().length}</td></tr>
-        <tr><td class="name">PPF deposits</td><td class="num">${ppfDeposits().length}</td></tr>
-        <tr><td class="name">Splitwise people</td><td class="num">${splitwise().length}</td></tr>
-        <tr><td class="name">Crypto</td><td class="num">${[st.coinbase.ok && 'Coinbase', st.binance.ok && 'Binance'].filter(Boolean).join(' · ') || (st.btc.ok ? 'typed in' : '—')}</td></tr>
-        <tr><td class="name">Allocation targets${getSetting('target_allocation', null) === null ? ' <span class="muted">(defaults, not set yet)</span>' : ''}</td><td class="num">${Object.entries(targets()).map(([k, v]) => `${esc(sleeveLabel(k))} ${v}%`).join(' · ')}</td></tr>
-      </tbody></table></section>
+    <section class="card" style="${whatsHereCollapsed ? 'padding: 18px 22px;' : ''}">
+      <header style="display:flex;align-items:center;justify-content:space-between;cursor:pointer;user-select:none;margin:${whatsHereCollapsed ? '0' : '0 0 14px'};" data-toggle-wh>
+        <div style="display:flex;align-items:center;gap:10px">
+          <h2>What's here</h2>
+          ${cps.length ? `<span class="tag" style="font-weight:600">${cps.length} checkpoints</span>` : ''}
+        </div>
+        <div style="display:flex;align-items:center;gap:12px">
+          <a class="btn primary" href="#/welcome" onclick="event.stopPropagation()">Connect more</a>
+          <span style="display:inline-flex;align-items:center;justify-content:center;color:var(--muted);user-select:none;padding:4px" title="${whatsHereCollapsed ? 'Expand What\'s here' : 'Collapse What\'s here'}">${chevron(whatsHereCollapsed)}</span>
+        </div>
+      </header>
+      <div style="display:${whatsHereCollapsed ? 'none' : 'block'};margin-top:10px">
+        <table class="data"><tbody>
+          <tr><td class="name">Checkpoints</td><td class="num">${cps.length}${cps.length ? ` · latest ${shortDate(cps.at(-1).as_of_date)}` : ''}</td></tr>
+          <tr><td class="name">Wallet transactions</td><td class="num">${transactionCount().toLocaleString('en-IN')}</td></tr>
+          <tr><td class="name">Fixed deposits</td><td class="num">${fixedDeposits().length}</td></tr>
+          <tr><td class="name">PPF deposits</td><td class="num">${ppfDeposits().length}</td></tr>
+          <tr><td class="name">Splitwise people</td><td class="num">${splitwise().length}</td></tr>
+          <tr><td class="name">Crypto</td><td class="num">${[st.coinbase.ok && 'Coinbase', st.binance.ok && 'Binance'].filter(Boolean).join(' · ') || (st.btc.ok ? 'typed in' : '-')}</td></tr>
+          <tr><td class="name">Allocation targets${getSetting('target_allocation', null) === null ? ' <span class="muted">(defaults, not set yet)</span>' : ''}</td><td class="num">${Object.entries(targets()).map(([k, v]) => `${esc(sleeveLabel(k))} ${v}%`).join(' · ')}</td></tr>
+        </tbody></table>
+      </div>
+    </section>
 
-    <section class="card"><header><h2>Import files</h2></header>
-      <p class="hero-secondary" style="margin-top:0">Files in <code>data/</code> import by themselves while the app is served from a local server (<code>python3 -m http.server ${location.port || 8000} --bind 127.0.0.1</code>). You can also import by hand: a checkpoint or transactions JSON from your agent, or a backup you exported.</p>
-      <div class="actions"><button class="btn" data-sync>Sync now</button><button class="btn" data-pick>Choose files…</button><input type="file" multiple accept=".json,.sqlite,.db" hidden data-file></div>
-      <pre class="log" data-log>${esc(log)}</pre>${inboxFailures().length ? '<p class="note" style="color:var(--critical)">These files are in data/ but were not imported. Fix the named field and it imports on the next sync.</p>' : ''}</section>
+    <section class="card" style="${importCollapsed ? 'padding: 18px 22px;' : ''}">
+      <header style="display:flex;align-items:center;justify-content:space-between;cursor:pointer;user-select:none;margin:${importCollapsed ? '0' : '0 0 14px'};" data-toggle-imp>
+        <h2>Import files</h2>
+        <span style="display:inline-flex;align-items:center;justify-content:center;color:var(--muted);user-select:none;padding:4px" title="${importCollapsed ? 'Expand Import files' : 'Collapse Import files'}">${chevron(importCollapsed)}</span>
+      </header>
+      <div style="display:${importCollapsed ? 'none' : 'block'};margin-top:10px">
+        <p class="hero-secondary" style="margin-top:0">Files in <code>data/</code> import by themselves while the app is served from a local server (<code>python3 -m http.server ${location.port || 8000} --bind 127.0.0.1</code>). You can also import by hand: a checkpoint or transactions JSON from your agent, or a backup you exported.</p>
+        <div class="actions"><button class="btn" data-sync>Sync now</button><button class="btn" data-pick>Choose files…</button><input type="file" multiple accept=".json,.sqlite,.db" hidden data-file></div>
+        <pre class="log" data-log>${esc(log)}</pre>${inboxFailures().length ? '<p class="note" style="color:var(--critical)">These files are in data/ but were not imported. Fix the named field and it imports on the next sync.</p>' : ''}
+      </div>
+    </section>
 
     ${manual.section()}
 
-    <section class="card"><header><h2>Backup & reset</h2></header>
-      <p class="hero-secondary" style="margin-top:0">Your database lives in this browser's storage. Clearing site data would erase it, so keep a backup.</p>
-      <div class="actions"><button class="btn" data-export>Download backup (.sqlite)</button><button class="btn" data-restore>Restore backup…</button><input type="file" accept=".sqlite,.db" hidden data-restore-file>
-      <button class="btn" data-reset style="margin-left:auto;color:var(--critical)">${isDemo() ? 'Clear demo data' : 'Erase everything'}</button></div></section></div>`
+    <section class="card" style="${backupCollapsed ? 'padding: 18px 22px;' : ''}">
+      <header style="display:flex;align-items:center;justify-content:space-between;cursor:pointer;user-select:none;margin:${backupCollapsed ? '0' : '0 0 14px'};" data-toggle-bk>
+        <h2>Backup & reset</h2>
+        <span style="display:inline-flex;align-items:center;justify-content:center;color:var(--muted);user-select:none;padding:4px" title="${backupCollapsed ? 'Expand Backup & reset' : 'Collapse Backup & reset'}">${chevron(backupCollapsed)}</span>
+      </header>
+      <div style="display:${backupCollapsed ? 'none' : 'block'};margin-top:10px">
+        <p class="hero-secondary" style="margin-top:0">Your database lives in this browser's storage. Clearing site data would erase it, so keep a backup.</p>
+        <div class="actions"><button class="btn" data-export>Download backup (.sqlite)</button><button class="btn" data-restore>Restore backup…</button><input type="file" accept=".sqlite,.db" hidden data-restore-file>
+        <button class="btn" data-reset style="margin-left:auto;color:var(--critical)">${isDemo() ? 'Clear demo data' : 'Erase everything'}</button></div>
+      </div>
+    </section></div>`
   }
   draw()
   manual.bind(el, () => draw())
   const logTo = (t) => { const n = el.querySelector('[data-log]'); if (n) n.textContent = t }
   el.addEventListener('click', async (e) => {
+    const toggleCp = e.target.closest('[data-toggle-cp]')
+    if (toggleCp) { checkpointCollapsed = !checkpointCollapsed; draw(); return }
+    const toggleWh = e.target.closest('[data-toggle-wh]')
+    if (toggleWh) { whatsHereCollapsed = !whatsHereCollapsed; draw(); return }
+    const toggleImp = e.target.closest('[data-toggle-imp]')
+    if (toggleImp) { importCollapsed = !importCollapsed; draw(); return }
+    const toggleBk = e.target.closest('[data-toggle-bk]')
+    if (toggleBk) { backupCollapsed = !backupCollapsed; draw(); return }
     const c = e.target.closest('[data-copy]'); if (c) copy(el.querySelector(`#${c.dataset.copy}`).textContent, c)
     if (e.target.closest('[data-sync]')) {
       const r = await syncInbox()

@@ -5,7 +5,7 @@
 //   flow   = (qty_n − qty_p) × price_n   × fx_n      money went in or came out
 //   fx     =  qty_p ×  price_p × (fx_n − fx_p)       the rupee moved
 //
-// These sum exactly to value_n − value_p — an algebraic identity:
+// These sum exactly to value_n − value_p - an algebraic identity:
 //
 //   qₙpₙfₙ − qₚpₚfₚ  ≡  qₚ(pₙ−pₚ)fₙ + (qₙ−qₚ)pₙfₙ + qₚpₚ(fₙ−fₚ)
 //
@@ -74,7 +74,7 @@ export function diff(prev, now) {
 }
 
 /** Roll holdings up to sleeves. A single-holding flow above `threshold` of its
- * sleeve is flagged — a bonus or split raises quantity with no money in. */
+ * sleeve is flagged - a bonus or split raises quantity with no money in. */
 export function bySleeve(attrs, threshold = 0.25) {
   const groups = new Map()
   for (const a of attrs) {

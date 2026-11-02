@@ -1,4 +1,4 @@
-// fingod — boot, routing, shell. No framework, no build step: this file is the
+// fingod - boot, routing, shell. No framework, no build step: this file is the
 // whole app's entry point, loaded as a native ES module.
 import * as db from './db.js'
 import { hasData, ppfRateDue } from './repo.js'
@@ -38,15 +38,21 @@ async function show() {
   if (!r && needsWelcome()) { location.hash = '#/welcome'; return }
   const entry = PAGES.find((p) => p.id === r) || PAGES[0]
   if (!hasData() && entry.id !== 'data') { location.hash = '#/welcome'; return }
-  const page = await entry.load()
+  let page
+  try {
+    page = await entry.load()
+  } catch (e) {
+    fatal(e)
+    return
+  }
   if (seq !== showSeq) return // a newer navigation took over while this page's code was loading
   const y = window.scrollY
   root.innerHTML = `<div class="app">
-    <header class="topbar"><h1>fingod</h1>
+    <header class="topbar"><h1>Fingod</h1>
       <nav class="tabs">${PAGES.map((p) => `<a class="tab" href="#/${p.id}" ${p.id === entry.id ? 'aria-current="page"' : ''}>${p.title}</a>`).join('')}</nav>
       <span class="spacer"></span><span class="sub" id="syncstate"></span>
-      <button class="btn" id="theme" title="Switch theme">${theme() === 'dark' ? 'Light' : 'Dark'}</button></header>
-    ${isDemo() ? '<div class="banner">You are looking at <b>demo data</b> — every name and number is invented. <a href="#/data">Clear it</a> and connect your own from <a href="#/welcome">setup</a>.</div>' : ''}
+      <button class="btn" id="theme" title="Switch theme">${theme() === 'dark' ? 'Light mode' : 'Dark mode'}</button></header>
+    ${isDemo() ? '<div class="banner">You are looking at <b>demo data</b> - every name and number is invented. <a href="#/data">Clear it</a> and connect your own from <a href="#/welcome">setup</a>.</div>' : ''}
     ${ppfBanner()}
     <main id="page"></main></div>`
   document.getElementById('theme').onclick = () => { localStorage.setItem('fingod-theme', theme() === 'dark' ? 'light' : 'dark'); applyTheme(); show() }
@@ -56,7 +62,7 @@ async function show() {
 }
 
 // The PPF rate changes by government notification each quarter, and nothing can read
-// it for you. So when a quarter starts without one, ask — once: dismissing it keeps it
+// it for you. So when a quarter starts without one, ask - once: dismissing it keeps it
 // away until the next quarter, and the Data page can set it at any time.
 function ppfBanner() {
   const due = ppfRateDue()
@@ -81,7 +87,7 @@ function bindPpfBanner() {
 async function showWelcome(seq) {
   const welcome = await import('./ui/welcome.js')
   if (seq !== showSeq) return
-  root.innerHTML = '<div class="app wide"><header class="topbar"><h1>fingod</h1><span class="spacer"></span><button class="btn" id="theme">' + (theme() === 'dark' ? 'Light' : 'Dark') + '</button></header><div id="welcome"></div></div>'
+  root.innerHTML = '<div class="app wide"><header class="topbar"><h1>Fingod</h1><span class="spacer"></span><button class="btn" id="theme">' + (theme() === 'dark' ? 'Light mode' : 'Dark mode') + '</button></header><div id="welcome"></div></div>'
   document.getElementById('theme').onclick = () => { localStorage.setItem('fingod-theme', theme() === 'dark' ? 'light' : 'dark'); applyTheme(); show() }
   cleanup = welcome.render(document.getElementById('welcome'), { onData: () => { location.hash = '#/dashboard' } })
 }
@@ -96,14 +102,14 @@ function fatal(e) {
 // nothing is imported from data/. Clearing the demo (Data page) resets and imports them.
 const syncInbox = () => (isDemo() ? Promise.resolve({ available: true, imported: [], errors: [] }) : importInbox())
 
-// Pick up whatever the agent dropped into data/ — quietly, every few seconds.
+// Pick up whatever the agent dropped into data/ - quietly, every few seconds.
 async function poll() {
   try {
     const r = await syncInbox()
     const el = document.getElementById('syncstate')
     const bad = inboxFailures()
     if (el) {
-      el.innerHTML = bad.length ? `<a href="#/data" style="color:var(--critical)" title="${esc(bad.map((b) => `${b.path}: ${b.error}`).join('\n'))}">⚠ ${bad.length === 1 ? esc(bad[0].path) : `${bad.length} files in data/`} couldn't be imported</a>` : esc(r.available ? 'watching data/' : 'no local server: open via http://localhost to auto-import')
+      el.innerHTML = bad.length ? `<a href="#/data" style="color:var(--critical)" title="${esc(bad.map((b) => `${b.path}: ${b.error}`).join('\n'))}">⚠ ${bad.length === 1 ? esc(bad[0].path) : `${bad.length} files in data/`} couldn't be imported</a>` : esc(r.available ? 'Watching data/' : 'no local server: open via http://localhost to auto-import')
     }
     if (r.imported.length && route() !== 'welcome') show()
   } catch (e) { console.error(e) }
@@ -117,7 +123,7 @@ async function boot() {
   try {
     await db.open()
   } catch (e) {
-    root.innerHTML = `<div class="app"><div class="empty"><b>Couldn't start the in-browser database.</b><br><code>${esc(e.message)}</code><br><br>Open fingod over http (<code>python3 serve.py</code>) rather than as a file, so the WebAssembly can load.</div></div>`
+    root.innerHTML = `<div class="app"><div class="empty"><b>Couldn't start the in-browser database.</b><br><code>${esc(e.message)}</code><br><br>Open Fingod over http (<code>python3 serve.py</code>) rather than as a file, so the WebAssembly can load.</div></div>`
     return
   }
   if (new URLSearchParams(location.search).has('demo') && !hasData()) { loadDemo(); history.replaceState(null, '', location.pathname + (location.hash && location.hash !== '#/welcome' ? location.hash : '#/dashboard')) }

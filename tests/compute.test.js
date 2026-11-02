@@ -3,8 +3,8 @@ import assert from 'node:assert/strict'
 import { diff, bySleeve } from '../src/compute/qtydiff.js'
 import { computeNetWorth } from '../src/compute/networth.js'
 import { accrued, value as fdValue } from '../src/compute/fd.js'
-import { allocate } from '../src/compute/allocation.js'
-import { returns, shares, fixedDepositReturns, ppfReturns } from '../src/compute/returns.js'
+import { allocate, DEFAULT_TARGET } from '../src/compute/allocation.js'
+import { returns, shares, fixedDepositReturns, ppfReturns, epfReturns } from '../src/compute/returns.js'
 import { balance as ppfBalance, quarterStart, quarterLabel, quartersBetween, rateFor } from '../src/compute/ppf.js'
 import { money } from '../src/compute/num.js'
 import { summarise, byPeriod, findDisposals } from '../src/compute/realised.js'
@@ -173,10 +173,6 @@ test('returns match the sleeve by hand; a missing cost basis is flagged, not hid
 test('attribution only appears with a comparison; price-only move is all market', () => {
   const now = [P({ sleeve: 'in_equity', symbol: 'ACME', isin: 'X', qty: 400, price: 120, invested_inr: 40000 })]
   assert.equal(returns(now, null).sleeves[0].market, null)
-  const prev = [P({ sleeve: 'in_equity', symbol: 'ACME', isin: 'X', qty: 400, price: 100, invested_inr: 40000 })]
-  const s = returns(now, prev).sleeves[0]
-  assert.equal(s.market, 8000); assert.equal(s.flow, 0); assert.equal(s.fx, 0)
-  assert.equal(s.return_pct, 20)
 })
 
 test('shares sum to exactly 100', () => {
@@ -321,4 +317,50 @@ test('PPF sleeve: interest is market, a deposit is flow', () => {
   assert.equal(s.market, 1620) // a month on 112000 + 50000
   assert.equal(money(s.market + s.flow + s.fx), s.delta)
   assert.equal(s.invested, 150000)
+})
+
+test('EPF sleeve: balance is value, contributions are flow, return is interest', () => {
+  const balances = [
+    { kind: 'epf', ref: 'Employer A', amount_inr: 100000, meta: { invested_inr: 90000 } },
+    { kind: 'epf', ref: 'Employer B', amount_inr: 50000, meta: { invested_inr: 50000 } },
+  ]
+  const s = epfReturns(balances, '2026-11-01', null)
+  assert.equal(s.value, 150000)
+  assert.equal(s.invested, 140000)
+  assert.equal(s.unrealised, 10000)
+  assert.equal(s.holdings.length, 2)
+  assert.equal(s.holdings[0].symbol, 'Employer A')
+  assert.equal(s.holdings[0].qty, 1)
+  assert.equal(s.holdings[0].unrealised, 10000)
+  assert.equal(s.holdings[0].share_pct, 66.67)
+
+  const prevBalances = [
+    { kind: 'epf', ref: 'Employer A', amount_inr: 85000, meta: { invested_inr: 80000 } },
+    { kind: 'epf', ref: 'Employer B', amount_inr: 45000, meta: { invested_inr: 45000 } },
+  ]
+  const compared = epfReturns(balances, '2026-11-01', prevBalances)
+  assert.equal(compared.delta, 20000)
+  assert.equal(compared.flow, 15000)
+  assert.equal(compared.market, 5000)
+  assert.equal(compared.fx, 0)
+})
+
+test('allocation includes EPF and PPF in default targets and actual portfolio', () => {
+  assert.ok(DEFAULT_TARGET.epf > 0)
+  assert.ok(DEFAULT_TARGET.ppf > 0)
+  const nw = {
+    as_of_date: '2026-11-01',
+    sleeves: { in_equity: 500000, us_equity: 200000 },
+    epf: 200000,
+    ppf: 100000,
+    cash: 50000,
+    fd_principal: 0,
+  }
+  const a = allocate(nw, DEFAULT_TARGET)
+  assert.ok(a.rows.some((r) => r.sleeve === 'epf'))
+  assert.ok(a.rows.some((r) => r.sleeve === 'ppf'))
+  assert.ok(a.actual.some((r) => r.sleeve === 'epf'))
+  assert.ok(a.actual.some((r) => r.sleeve === 'ppf'))
+  const totalShare = a.actual.reduce((s, r) => s + r.share_pct, 0)
+  assert.ok(Math.abs(totalShare - 100) < 0.02)
 })

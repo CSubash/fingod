@@ -72,12 +72,14 @@ export function returns(now, prev, threshold = 0.25) {
   }
 }
 
-/** The FD sleeve: no quantity, so growth is interest (market), not flow — except
+/** The FD sleeve: no quantity, so growth is interest (market), not flow - except
  * on the day a deposit opens or closes, which is money moving. */
 export function fixedDepositReturns(fds, at, prevAt) {
   const live = fds.filter((f) => isLive(f, at))
-  const rows = live.map((f) => ({
+  const sh = shares(live.map((f) => fdValue(f, at)))
+  const rows = live.map((f, i) => ({
     sleeve: 'fd', symbol: `${f.bank}-${f.id}`, name: `${f.rate_pct}% ${f.bank}${f.note ? ` · ${f.note}` : ''}`,
+    qty: 1, price: fdValue(f, at), currency: 'INR', share_pct: sh[i] || 0, market: null, flagged: false,
     value: fdValue(f, at), invested: money(num(f.principal)), unrealised: accrued(f, at),
     return_pct: pct(accrued(f, at), num(f.principal)),
   }))
@@ -100,6 +102,7 @@ export function ppfReturns(deposits, rates, at, prevAt) {
   const b = ppfBalance(deposits, rates, at)
   const rows = b.deposited ? [{
     sleeve: 'ppf', symbol: 'PPF', name: `PPF · ${deposits.filter((d) => d.deposit_date <= at).length} deposits`,
+    qty: 1, price: b.value, currency: 'INR', share_pct: 100, market: null, flagged: false,
     value: b.value, invested: b.deposited, unrealised: b.interest, return_pct: pct(b.interest, b.deposited),
   }] : []
   const out = { sleeve: 'ppf', value: b.value, invested: b.deposited, unrealised: b.interest, return_pct: pct(b.interest, b.deposited), partial: false, holdings: rows, market: null, flow: null, fx: null, delta: null }
@@ -107,6 +110,57 @@ export function ppfReturns(deposits, rates, at, prevAt) {
     const p = ppfBalance(deposits, rates, prevAt)
     const flow = money(b.deposited - p.deposited)
     const delta = money(b.value - p.value)
+    Object.assign(out, { delta, flow, fx: 0, market: money(delta - flow) })
+  }
+  return out
+}
+
+/** The EPF sleeve, built from balances (kind='epf'). Contributions are flow,
+ * and growth above invested amount is interest (market). */
+export function epfReturns(balances, at, prevBalances) {
+  const epf = (balances || []).filter((b) => b.kind === 'epf')
+  const sh = shares(epf.map((b) => num(b.amount_inr)))
+  const rows = epf.map((b, i) => {
+    const val = money(num(b.amount_inr))
+    let meta = {}
+    if (b.meta) {
+      try { meta = typeof b.meta === 'string' ? JSON.parse(b.meta) : b.meta } catch {}
+    }
+    const inv = money(meta && meta.invested_inr !== undefined && meta.invested_inr !== null
+      ? num(meta.invested_inr)
+      : (b.invested_inr !== undefined && b.invested_inr !== null ? num(b.invested_inr) : num(b.amount_inr)))
+    const unrealised = money(val - inv)
+    return {
+      sleeve: 'epf', symbol: b.ref, name: b.ref,
+      qty: 1, price: val, currency: 'INR',
+      value: val, invested: inv, unrealised,
+      return_pct: inv ? pct(unrealised, inv) : 0,
+      share_pct: sh[i] || 0, market: null, flagged: false,
+    }
+  })
+  rows.sort((a, b) => b.value - a.value)
+  const value = money(sum(rows.map((r) => r.value)))
+  const invested = money(sum(rows.map((r) => r.invested)))
+  const unrealised = money(value - invested)
+  const out = {
+    sleeve: 'epf', value, invested, unrealised,
+    return_pct: invested ? pct(unrealised, invested) : 0,
+    partial: false, holdings: rows, market: null, flow: null, fx: null, delta: null,
+  }
+  if (prevBalances) {
+    const prevEpf = prevBalances.filter((b) => b.kind === 'epf')
+    const prevVal = money(sum(prevEpf.map((b) => num(b.amount_inr))))
+    const prevInv = money(sum(prevEpf.map((b) => {
+      let meta = {}
+      if (b.meta) {
+        try { meta = typeof b.meta === 'string' ? JSON.parse(b.meta) : b.meta } catch {}
+      }
+      return meta && meta.invested_inr !== undefined && meta.invested_inr !== null
+        ? num(meta.invested_inr)
+        : (b.invested_inr !== undefined && b.invested_inr !== null ? num(b.invested_inr) : num(b.amount_inr))
+    })))
+    const flow = money(invested - prevInv)
+    const delta = money(value - prevVal)
     Object.assign(out, { delta, flow, fx: 0, market: money(delta - flow) })
   }
   return out

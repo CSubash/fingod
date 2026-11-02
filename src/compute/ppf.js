@@ -1,4 +1,4 @@
-// Public Provident Fund, valued by formula at any date — so deposits entered today
+// Public Provident Fund, valued by formula at any date - so deposits entered today
 // still price correctly at checkpoints taken before they existed.
 //
 // The rules, as the scheme applies them:

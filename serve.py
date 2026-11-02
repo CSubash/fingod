@@ -72,7 +72,7 @@ if __name__ == "__main__":
     os.makedirs(os.path.join(DATA, "transactions"), exist_ok=True)
     with Server(("127.0.0.1", PORT), Handler) as srv:
         url = f"http://localhost:{PORT}"
-        print(f"fingod → {url}   (watching {os.path.relpath(DATA)}/, Ctrl-C to stop)")
+        print(f"fingod -> {url}   (watching {os.path.relpath(DATA)}/, Ctrl-C to stop)")
         if "--no-open" not in sys.argv:
             threading.Timer(0.6, lambda: webbrowser.open(url)).start()
         try:

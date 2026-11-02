@@ -1,6 +1,6 @@
 // Getting data in. Two kinds of file arrive from your coding agent (see
 // docs/DATA-FORMAT.md): checkpoints and Wallet transactions. Both are
-// idempotent — re-importing a file never duplicates anything.
+// idempotent - re-importing a file never duplicates anything.
 import { all, first, scalar, write, setSetting } from './db.js'
 import { money } from './compute/num.js'
 
@@ -74,7 +74,7 @@ export function ingestCheckpoint(p) {
       const currency = h.currency || 'INR'
       const fx = currency === 'INR' ? 1 : isNum(h.fx_rate) ? Number(h.fx_rate) : usd
       const value = money(Number(h.qty) * Number(h.price) * fx)
-      if (isNum(h.value_inr) && Math.abs(Number(h.value_inr) - value) > 1) warnings.push(`${h.symbol}: source says ₹${h.value_inr}, qty × price × fx is ₹${value} — check the mapping`)
+      if (isNum(h.value_inr) && Math.abs(Number(h.value_inr) - value) > 1) warnings.push(`${h.symbol}: source says ₹${h.value_inr}, qty × price × fx is ₹${value} - check the mapping`)
       run(`INSERT INTO holdings (checkpoint_id, sleeve, symbol, name, isin, qty, price, fx_rate, currency, value_inr, avg_cost, invested_inr)
            VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
         [id, h.sleeve, h.symbol, h.name || h.symbol, h.isin || null, Number(h.qty), Number(h.price), fx, currency, value, nullable(h.avg_cost), nullable(h.invested_inr)])
@@ -240,7 +240,7 @@ export function saveFixedDeposit(fd) {
   })
 }
 /** Standing rows from a file: fixed deposits, PPF, Splitwise, confirmed trades and the target
- * allocation. Idempotent — a deposit is matched on bank + principal + start date, a PPF deposit
+ * allocation. Idempotent - a deposit is matched on bank + principal + start date, a PPF deposit
  * on date + amount, a PPF rate on its quarter. */
 export function ingestStanding(p) {
   const out = { fixed_deposits: 0, ppf_deposits: 0, ppf_rates: 0, splitwise: 0, trades: 0, target_allocation: false }

@@ -34,6 +34,7 @@ Declared per agent, and the four must stay in step:
 | Agent | Config | Notes |
 |---|---|---|
 | Claude Code | `.mcp.json` (+ `.claude/settings.json`) | start `claude` inside the repo and approve the servers |
+| Antigravity | `.gemini/settings.json` (+ `.env`) | open workspace in Antigravity / `agy`; run `python serve.py` |
 | Codex CLI | `.codex/config.toml` | trust the project; `codex mcp login indmoney` |
 | Gemini CLI | `.gemini/settings.json` | `/mcp auth indmoney` |
 | Pi | `.pi/mcp.json` (+ `.pi/settings.json`) | trust the project; `/mcp login indmoney`; the skills load as `/skill:setup` and `/skill:refresh` |
