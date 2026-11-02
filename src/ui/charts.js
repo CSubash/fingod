@@ -52,19 +52,23 @@ export function lineChart({ series, height = 280, yFormat = String, xFormat, zer
   const ends = labelEnds ? live.map((s) => { const last = s.points[s.points.length - 1]; return { s, x: sx(last[0]) + 8, y: sy(last[1]) + 4 } }).sort((a, b) => a.y - b.y) : []
   for (let i = 0; i < ends.length; i++) { const min = i ? ends[i - 1].y + LABEL_GAP : pad.t + 6; if (ends[i].y < min) ends[i].y = min }
   for (let i = ends.length - 1; i >= 0; i--) { const max = i < ends.length - 1 ? ends[i + 1].y - LABEL_GAP : height - pad.b; if (ends[i].y > max) ends[i].y = max }
-  const endText = ends.map((e) => `<text ${e.s.id ? `data-series-toggle="${e.s.id}"` : ''} x="${e.x}" y="${e.y.toFixed(1)}" fill="${e.s.color}" font-size="${fontSize}" style="cursor:pointer">${esc(e.s.endLabel ?? yFormat(e.s.points[e.s.points.length - 1][1]))}</text>`).join('')
+  const endText = ends.map((e) => `<text class="lc-end" ${e.s.id ? `data-series-toggle="${e.s.id}"` : ''} data-key="${esc(e.s.key ?? e.s.label)}" x="${e.x}" y="${e.y.toFixed(1)}" fill="${e.s.color}" font-size="${fontSize}" style="cursor:pointer">${esc(e.s.endLabel ?? yFormat(e.s.points[e.s.points.length - 1][1]))}</text>`).join('')
 
+  // Each series is a group keyed for the legend, with a wide invisible line on top so a thin line is easy to hover.
   const lines = live.map((s) => {
     const pts = s.points.map((p) => `${sx(p[0]).toFixed(1)},${sy(p[1]).toFixed(1)}`)
-    const path = s.points.length > 1 ? `<polyline ${s.id ? `data-series-toggle="${s.id}"` : ''} points="${pts.join(' ')}" fill="none" stroke="${s.color}" stroke-width="2.6" stroke-linejoin="round" stroke-linecap="round" style="cursor:pointer"><title>${esc(s.label)} (click line to toggle)</title></polyline>` : ''
-    const dots = s.points.map((p) => `<circle ${s.id ? `data-series-toggle="${s.id}"` : ''} cx="${sx(p[0]).toFixed(1)}" cy="${sy(p[1]).toFixed(1)}" r="${s.points.length === 1 ? 4 : 8}" fill="${s.points.length === 1 ? s.color : 'transparent'}" style="cursor:pointer"><title>${esc(s.label)} · ${esc(xFormat ? xFormat(p[0]) : '')} · ${esc(yFormat(p[1]))} (click line to toggle)</title></circle>`).join('')
-    return path + dots
+    const path = s.points.length > 1
+      ? `<polyline class="lc-path" ${s.id ? `data-series-toggle="${s.id}"` : ''} points="${pts.join(' ')}" fill="none" stroke="${s.color}" stroke-width="${s.width || 2.4}" stroke-linejoin="round" stroke-linecap="round"${s.dash ? ` stroke-dasharray="${s.dash}"` : ''} style="cursor:pointer"><title>${esc(s.label)} (click line to toggle)</title></polyline>` +
+        `<polyline ${s.id ? `data-series-toggle="${s.id}"` : ''} points="${pts.join(' ')}" fill="none" stroke="transparent" stroke-width="14" stroke-linejoin="round" pointer-events="stroke" style="cursor:pointer"/>`
+      : ''
+    const dots = s.points.map((p) => `<circle ${s.id ? `data-series-toggle="${s.id}"` : ''} cx="${sx(p[0]).toFixed(1)}" cy="${sy(p[1]).toFixed(1)}" r="${s.points.length === 1 ? 4 : 7}" fill="${s.points.length === 1 ? s.color : 'transparent'}" style="cursor:pointer"><title>${esc(s.label)} · ${esc(xFormat ? xFormat(p[0]) : '')} · ${esc(yFormat(p[1]))}</title></circle>`).join('')
+    return `<g class="lc-line" data-key="${esc(s.key ?? s.label)}" style="color:${s.color}">${path}${dots}</g>`
   }).join('')
   return `<svg viewBox="0 0 ${W} ${height}" role="img" aria-label="${esc(title)}" style="width:100%;height:auto;display:block">${grid}${base}${xl}${lines}${endText}</svg>`
 }
 
 /** periods: [{period, label, segments: {key: n}}]; keys in stacking order. */
-export function stackedBars({ periods, keys, color, height = 300, yFormat = String, title = '' }) {
+export function stackedBars({ periods, keys, color, height = 300, yFormat = String, title = '', link = true }) {
   if (!periods.length) return ''
   const pad = { l: 62, r: 12, t: 12, b: 28 }
   const totals = periods.map((p) => keys.reduce((s, k) => s + (p.segments[k] || 0), 0))
@@ -81,7 +85,7 @@ export function stackedBars({ periods, keys, color, height = 300, yFormat = Stri
     const segs = keys.filter((k) => p.segments[k] > 0).map((k) => {
       const v = p.segments[k], y0 = sy(acc + v), h = sy(acc) - y0
       acc += v
-      return `<rect data-period="${esc(p.period)}" data-label="${esc(k)}" x="${x.toFixed(1)}" y="${y0.toFixed(1)}" width="${w.toFixed(1)}" height="${Math.max(h - 1, 0.5).toFixed(1)}" fill="${color(k)}" style="cursor:pointer"><title>${esc(p.label)} · ${esc(k)} · ${esc(yFormat(v))}</title></rect>`
+      return `<rect ${link ? `data-period="${esc(p.period)}" data-label="${esc(k)}" ` : ''}x="${x.toFixed(1)}" y="${y0.toFixed(1)}" width="${w.toFixed(1)}" height="${Math.max(h - 1, 0.5).toFixed(1)}" fill="${color(k)}"${link ? ' style="cursor:pointer"' : ''}><title>${esc(p.label)} · ${esc(k)} · ${esc(yFormat(v))}</title></rect>`
     }).join('')
     const lab = i % step === 0 ? `<text x="${(x + w / 2).toFixed(1)}" y="${height - 8}" text-anchor="middle" fill="var(--muted)" font-size="11.5">${esc(p.label)}</text>` : ''
     return segs + lab
@@ -115,4 +119,31 @@ export function proportionBar(rows) {
   const total = rows.reduce((s, r) => s + r.value, 0)
   if (!total) return ''
   return `<div class="proportion-bar">${rows.filter((r) => r.value > 0).map((r) => `<span class="seg" title="${esc(r.label)}" style="width:${(r.value / total) * 100}%;background:${r.color}"></span>`).join('')}</div>`
+}
+
+
+/** A legend whose items toggle their series, and light the matching line on hover or focus.
+ * series: [{key, label, color, dash?}]; hidden: Set of keys currently off. */
+export function interactiveLegend(series, hidden = new Set()) {
+  const items = series.map((s) => {
+    const off = hidden.has(s.key)
+    return `<button type="button" class="legend-toggle lg${off ? ' off' : ''}" data-key="${esc(s.key)}" data-toggle="${esc(s.key)}" aria-pressed="${!off}" style="--lg-color:${s.color}" title="${off ? 'Show' : 'Hide'} ${esc(s.label)}">` +
+      `<i class="swatch" style="background:${s.color}"></i>${esc(s.label)}${s.dash ? '<span class="lg-tag">dashed</span>' : ''}</button>`
+  }).join('')
+  return `<div class="legend">${items}${hidden.size ? '<button type="button" class="legend-toggle lg-reset" data-show-all>Show all</button>' : ''}</div>`
+}
+
+/** Hovering or focusing a legend item or a line lights both. Wire once on a stable ancestor; it
+ * works on anything inside a [data-chart] whose parts carry the same data-key. */
+export function bindHighlight(root) {
+  const set = (scope, key) => scope.querySelectorAll('[data-key]').forEach((n) => {
+    const on = key !== null && n.dataset.key === key
+    n.classList.toggle('glow', on)
+    n.classList.toggle('dim', key !== null && !on)
+  })
+  const scopeOf = (n) => n.closest && n.closest('[data-chart]')
+  root.addEventListener('mouseover', (e) => { const sc = scopeOf(e.target); if (!sc) return; const t = e.target.closest('[data-key]'); set(sc, t ? t.dataset.key : null) })
+  root.addEventListener('mouseout', (e) => { const sc = scopeOf(e.target); if (sc && !sc.contains(e.relatedTarget)) set(sc, null) })
+  root.addEventListener('focusin', (e) => { const sc = scopeOf(e.target), t = e.target.closest && e.target.closest('[data-key]'); if (sc && t) set(sc, t.dataset.key) })
+  root.addEventListener('focusout', (e) => { const sc = scopeOf(e.target); if (sc) set(sc, null) })
 }

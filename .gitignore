@@ -15,6 +15,10 @@ node_modules/
 /scripts/mf-navs/
 /scripts/us-fx-rates.json
 /scripts/opening-lots.json
+/scripts/*.py
+/scripts/*.cjs
+__pycache__/
+*.pyc
 *.xls
 *.xlsx
 tradebook-*.csv

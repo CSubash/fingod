@@ -1,4 +1,4 @@
-import { trades, disposals } from '../repo.js'
+import { trades, disposals, ledgerView } from '../repo.js'
 import { summarise, byPeriod } from '../compute/realised.js'
 import { recordTrade, deleteTrade, IngestError } from '../ingest.js'
 import { compact, moneyExact, money, plain, pct, shortDate, monthLabel, sleeveLabel, delta, esc } from './format.js'
@@ -36,6 +36,22 @@ function detected(d) {
     <p class="note">Two blind spots are structural: a stock bought <i>and</i> sold between two checkpoints never appears in a snapshot, and a week with both a sale and a purchase of the same stock nets to one disposal. Weekly checkpoints mean weekly resolution.</p></section>`
 }
 
+function capitalGains(v) {
+  if (!v) return ''
+  const yr = (y) => `<tr><td class="name">${esc(y.fy)}</td><td class="num">${y.disposals}</td><td class="num">${delta(y.st)}</td><td class="num">${delta(y.lt)}</td><td class="num">${y.slab_gain ? delta(y.slab_gain) : '—'}</td><td class="num">${y.est_tax ? money(y.est_tax) : '—'}${y.notes.length ? `<div style="color:var(--muted);font-size:12px;max-width:260px;margin-left:auto">${esc(y.notes.join('; '))}</div>` : ''}</td></tr>`
+  const warn = [
+    v.mismatches.length ? `<p class="note" style="color:var(--critical)">The ledger disagrees with what you hold for ${v.mismatches.length} position${v.mismatches.length === 1 ? '' : 's'}: ${esc(v.mismatches.slice(0, 5).map((m) => `${m.symbol} (ledger ${plain(m.ledger_qty, 3)}, held ${plain(m.held_qty, 3)})`).join(', '))}${v.mismatches.length > 5 ? ', …' : ''}. A trade is missing, or a bonus or split is not in the ledger. Gains on those positions may be wrong, and XIRR is left blank for their sleeves.</p>` : '',
+    v.unmatched.length ? `<p class="note" style="color:var(--critical)">${v.unmatched.length} sale${v.unmatched.length === 1 ? '' : 's'} had no purchase behind ${v.unmatched.length === 1 ? 'it' : 'them'} (${esc(v.unmatched.slice(0, 4).map((u) => u.symbol).join(', '))}${v.unmatched.length > 4 ? ', …' : ''}): the ledger starts after the position was opened. They are left out rather than counted as pure profit.</p>` : '',
+  ].join('')
+  return `<section class="card"><header><h2>Capital gains, from your trade ledger</h2></header>
+    <p class="note" style="margin-top:0">${v.trades.toLocaleString('en-IN')} trades from ${shortDate(v.from)} to ${shortDate(v.to)}, matched first-in first-out. Unlike the sales above, which are inferred from two snapshots, these have exact dates and prices.</p>${warn}
+    ${v.years.length ? `<div class="table-wrap"><table class="data"><thead><tr><th>Financial year</th><th class="num">Sales</th><th class="num">Short-term</th><th class="num">Long-term</th><th class="num">At slab rate</th><th class="num">Estimated tax</th></tr></thead><tbody>${v.years.map(yr).join('')}</tbody></table></div>` : '<div class="empty">No sales in the ledger yet.</div>'}
+    <p class="note"><b>An estimate, not tax advice.</b> Listed equity and equity funds: long-term after 12 months, 12.5% above a ₹1.25 lakh yearly exemption, short-term 20% (15% and 10% with ₹1 lakh before 23 Jul 2024). Foreign shares are long-term after 24 months, gold ETFs after 12. It is before surcharge and cess, and it does not model indexation or carrying losses forward. Debt funds and short-term gains on foreign shares and gold are taxed at your slab rate, so they show as gains but not as tax. Mutual funds are assumed to be equity-oriented.</p>
+    ${v.disposals.length ? `<details><summary>Every sale (${v.disposals.length})</summary><div class="table-wrap"><table class="data"><thead><tr><th>Holding</th><th class="num">Bought</th><th class="num">Sold</th><th class="num">Qty</th><th class="num">Cost</th><th class="num">Proceeds</th><th class="num">Gain</th><th>Term</th></tr></thead><tbody>
+      ${v.disposals.slice(0, 200).map((d) => `<tr><td class="name">${esc(d.name)}</td><td class="num">${shortDate(d.buy_date)}</td><td class="num">${shortDate(d.sell_date)}</td><td class="num">${plain(d.qty, d.qty % 1 ? 3 : 0)}</td><td class="num">${money(d.cost)}</td><td class="num">${money(d.proceeds)}</td><td class="num">${delta(d.gain)}</td><td>${d.term || 'slab'}</td></tr>`).join('')}
+    </tbody></table></div>${v.disposals.length > 200 ? '<p class="note">The latest 200 are shown.</p>' : ''}</details>` : ''}</section>`
+}
+
 export function render(el) {
   const draw = () => {
     const allTs = trades()
@@ -43,7 +59,6 @@ export function render(el) {
     const s = summarise(ts)
     const d = disposals()
     const periods = byPeriod([...ts].reverse(), gran)
-
     // Filter trades if a period is selected
     let displayedTrades = ts
     if (selectedPeriod && gran !== 'all') {
@@ -78,29 +93,50 @@ export function render(el) {
       ? `All trades (${sortedTrades.length})`
       : `Trades (${sortedTrades.length})`
 
-    el.innerHTML = `<div class="grid" style="gap:16px">${detected(d)}
+    // Sleeve dropdown state & label
+    let sleeveDropdownLabel = 'Filter sleeves'
+    if (activeSleeves.size === 0) {
+      sleeveDropdownLabel = 'Select sleeves (0)'
+    } else if (activeSleeves.size === SLEEVE_FILTERS.length) {
+      sleeveDropdownLabel = `All sleeves (${SLEEVE_FILTERS.length})`
+    } else if (activeSleeves.size === 1) {
+      const sf = SLEEVE_FILTERS.find((f) => activeSleeves.has(f.id))
+      sleeveDropdownLabel = sf ? sf.label : '1 sleeve'
+    } else {
+      sleeveDropdownLabel = `${activeSleeves.size} sleeves selected`
+    }
+
+    const allSleevesSelected = activeSleeves.size === SLEEVE_FILTERS.length
+    const noSleevesSelected = activeSleeves.size === 0
+
+    el.innerHTML = `<div class="grid" style="gap:16px">${detected(d)}${capitalGains(ledgerView())}
     <section class="card">
       <header style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;position:relative">
         <h2>Realised profit</h2>
         <div class="dropdown" style="position:relative;display:inline-block">
-          <button class="btn" id="sleeve-dropdown-btn" type="button" style="display:inline-flex;align-items:center;gap:8px;font-size:13px">
-            <span>Sleeves (${activeSleeves.size}/${SLEEVE_FILTERS.length})</span>
-            <span style="font-size:10px">${dropdownOpen ? '▲' : '▼'}</span>
+          <button class="btn" id="sleeve-dropdown-btn" type="button" style="display:inline-flex;align-items:center;gap:6px;padding:5px 12px;background:var(--card);font-size:13px;border-color:var(--ring-strong);color:var(--ink);cursor:pointer">
+            <span>${sleeveDropdownLabel}</span>
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="transform:${dropdownOpen ? 'rotate(180deg)' : 'none'};transition:transform .15s"><polyline points="6 9 12 15 18 9"></polyline></svg>
           </button>
-          <div id="sleeve-dropdown-menu" style="display:${dropdownOpen ? 'block' : 'none'};position:absolute;right:0;top:calc(100% + 6px);background:var(--card);border:1px solid var(--ring-strong);border-radius:8px;box-shadow:0 12px 32px rgba(0,0,0,0.7);padding:12px 14px;z-index:200;min-width:180px;width:max-content">
-            <div style="display:flex;justify-content:space-between;align-items:center;gap:20px;padding-bottom:10px;margin-bottom:10px;border-bottom:1px solid var(--ring);font-size:12px">
-              <button type="button" data-action="select-all" style="background:none;border:none;color:var(--good);cursor:pointer;font-weight:600;padding:2px 4px">Select all</button>
-              <button type="button" data-action="clear-all" style="background:none;border:none;color:var(--muted);cursor:pointer;font-weight:600;padding:2px 4px">Clear all</button>
+          ${dropdownOpen ? `
+            <div id="sleeve-dropdown-menu" style="position:absolute;top:calc(100% + 4px);right:0;z-index:200;background:var(--card);border:1px solid var(--ring-strong);border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,0.3);min-width:230px;padding:8px">
+              <div style="display:flex;justify-content:space-between;align-items:center;padding:2px 4px 8px;border-bottom:1px solid var(--gridline);margin-bottom:6px">
+                <button type="button" class="btn ${allSleevesSelected ? 'primary' : ''}" data-action="select-all" style="padding:2px 8px;font-size:11.5px;${allSleevesSelected ? 'background:#ffffff;color:#000000;border-color:#ffffff;font-weight:600;' : ''}">Select all</button>
+                <button type="button" class="btn ${noSleevesSelected ? 'primary' : ''}" data-action="clear-all" style="padding:2px 8px;font-size:11.5px;${noSleevesSelected ? 'background:#ffffff;color:#000000;border-color:#ffffff;font-weight:600;' : ''}">Clear all</button>
+              </div>
+              <div style="max-height:220px;overflow-y:auto;display:flex;flex-direction:column;gap:2px">
+                ${SLEEVE_FILTERS.map((f) => {
+                  const isChecked = activeSleeves.has(f.id)
+                  const sTrades = allTs.filter((t) => t.sleeve === f.id)
+                  return `<label style="display:flex;align-items:center;gap:8px;padding:5px 8px;border-radius:6px;cursor:pointer;font-size:13px;user-select:none" class="ppf-year-label">
+                    <input type="checkbox" data-sleeve-filter="${f.id}" ${isChecked ? 'checked' : ''} style="width:auto;margin:0;cursor:pointer">
+                    <span style="font-weight:600;color:var(--ink)">${f.label}</span>
+                    <span class="muted" style="margin-left:auto;font-size:12px">${sTrades.length} trade${sTrades.length === 1 ? '' : 's'}</span>
+                  </label>`
+                }).join('')}
+              </div>
             </div>
-            <div style="display:flex;flex-direction:column;gap:10px">
-              ${SLEEVE_FILTERS.map((f) => `
-                <label style="display:flex;align-items:center;gap:10px;cursor:pointer;font-size:13px;white-space:nowrap;user-select:none;margin:0">
-                  <input type="checkbox" data-sleeve-filter="${f.id}" ${activeSleeves.has(f.id) ? 'checked' : ''} style="cursor:pointer;margin:0;width:15px;height:15px;flex-shrink:0">
-                  <span>${f.label}</span>
-                </label>
-              `).join('')}
-            </div>
-          </div>
+          ` : ''}
         </div>
       </header>
       ${ts.length ? `
@@ -168,6 +204,17 @@ export function render(el) {
   }
   draw()
 
+  el.addEventListener('change', (e) => {
+    const chk = e.target.closest('input[data-sleeve-filter]')
+    if (chk) {
+      const sleeve = chk.dataset.sleeveFilter
+      if (chk.checked) activeSleeves.add(sleeve)
+      else activeSleeves.delete(sleeve)
+      draw()
+      return
+    }
+  })
+
   el.addEventListener('click', (e) => {
     // Dropdown toggle
     if (e.target.closest('#sleeve-dropdown-btn')) {
@@ -183,19 +230,6 @@ export function render(el) {
         activeSleeves = new Set(SLEEVE_FILTERS.map((f) => f.id))
       } else if (act.dataset.action === 'clear-all') {
         activeSleeves.clear()
-      }
-      draw()
-      return
-    }
-
-    // Sleeve filter checkbox
-    const sFilter = e.target.closest('[data-sleeve-filter]')
-    if (sFilter) {
-      const sleeve = sFilter.dataset.sleeveFilter
-      if (activeSleeves.has(sleeve)) {
-        activeSleeves.delete(sleeve)
-      } else {
-        activeSleeves.add(sleeve)
       }
       draw()
       return

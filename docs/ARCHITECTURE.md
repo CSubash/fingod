@@ -108,8 +108,11 @@ See [MCP-SHAPES.md](MCP-SHAPES.md) for why each source owns what it owns.
 
 ```
 NW_liquid = cash + IN equity + IN MF + US equity + BTC + FD principal − credit card outstanding
-NW_total  = NW_liquid + EPF + PPF + FD accrued interest + Splitwise receivable
+NW_total  = NW_liquid + EPF + PPF + FD accrued interest + Splitwise receivable + other assets − loans
 ```
+
+Other assets (NPS, PPF, property, physical gold) and loans are hand-entered, dated rows. They are illiquid,
+so they move the total and never the liquid figure.
 
 Liquid is what you could act on. Total is what you are worth on paper. Both are computed at every
 checkpoint (`src/compute/networth.js`), and the tests prove the two differ by exactly the illiquid part.
@@ -135,12 +138,15 @@ The schema is in `src/schema.js` (versioned migrations, applied on open):
 
 | Table | Purpose |
 |---|---|
-| `checkpoints` | One row per snapshot date, with the USD/INR rate and per-source status |
+| `checkpoints` | One row per snapshot date, with the USD/INR rate, per-source status and optional benchmark levels |
 | `holdings` | Positions at a checkpoint: sleeve, symbol, ISIN, qty, price, fx, value, cost basis |
 | `balances` | Cash, credit cards, EPF and Splitwise at a checkpoint |
 | `fixed_deposits`, `splitwise_balances`, `manual_holdings` | Standing and hand-entered rows |
 | `transactions`, `transaction_labels`, `wallet_accounts` | Wallet records, idempotent on Wallet's own id |
 | `trades` | Realised profit you confirmed |
+| `ledger` | Every buy and sell from a tradebook or a CAS: the exact dates and prices a snapshot cannot see |
+| `manual_assets` | NPS, PPF, property and loans, several dated entries each |
+| `benchmark_levels` | Daily Nifty 50 and S&P 500 closes, so benchmarks load in one file rather than one level per checkpoint |
 | `settings` | Target allocation, your agent choice |
 | `imported_files` | Which files from `data/` were imported, so syncing twice is a no-op |
 
@@ -175,7 +181,36 @@ honest:
 - **Realised** profit is bucketed on the **exit** date. Break-even counts as a loser, and gross wins and
   gross losses are shown separately so they never net off into a misleading total.
 
+## Returns, benchmarks, cash flow and gains
+
+- **XIRR** (`compute/xirr.js`) is the money-weighted counterpart of the time-weighted index: the annual rate
+  that makes your cash flows, and what you hold now, net to zero. From checkpoints, a period's flow
+  (never market, never FX) is dated at the middle of the period, and nothing is shown under 90 days because
+  annualising a few weeks is noise. Where a trade ledger covers a sleeve completely, XIRR uses the real
+  trade dates instead and runs since the first trade.
+- **Benchmarks** (`compute/benchmark.js`): the time-weighted portfolio index against Nifty 50 and the
+  S&P 500 (a checkpoint reads the nearest close within 7 days, never a staler one) (SPY, converted to rupees at each checkpoint's rate), every line rebased to 100 at the latest
+  date they all have in common. Both sides ignore flow, so the comparison is like for like.
+- **Savings and runway** (`compute/cashflow.js`): spend is exactly what the spend chart draws; income is
+  money in that is not a transfer, an investment sale or a labelled refund; saved is income minus spend
+  (money invested counts as saved). Headline figures average the last three **complete** months, and a
+  month with no transactions is skipped so a Wallet gap never reads as a month of saving everything.
+  Runway is net worth divided by that monthly spend, once for liquid and once for total.
+- **Income from investments** (`compute/income.js`): every positive, non-transfer Wallet credit in the
+  "Interest, dividends" category, summed per month over the trailing 12 months (empty months kept). Wallet
+  has no finer field, so the note splits interest from dividends and a blank note stays "unspecified" instead
+  of being guessed. Cash received, not a yield, and no forecast.
+- **Capital gains** (`compute/gains.js`): FIFO lots from the ledger, long or short term by holding period,
+  and a per-financial-year **estimate** of tax under the listed-securities rules after July 2024 (and the
+  earlier rates for sales before 23 Jul 2024), before surcharge and cess. It sets losses off as the rules
+  allow, reports what it cannot carry forward, and **leaves out what it cannot model** rather than
+  guessing: gains taxed at your slab rate, and indexation. Mutual funds are assumed to be equity-oriented.
+  It is information, not tax advice.
+
 ## Known limits
+
+- The ledger is only as complete as the file your agent could build. Bonuses, splits and trades before the
+  tradebook's start are not modelled, and the app says so wherever the ledger disagrees with a checkpoint.
 
 - Weekly checkpoints mean weekly resolution. A stock bought and sold between two checkpoints is
   invisible, and a week with both a sale and a purchase of the same stock nets to one disposal.

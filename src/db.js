@@ -41,6 +41,67 @@ async function idbClear() {
   })
 }
 
+function ensureTables() {
+  try {
+    const info = db.exec("PRAGMA table_info(checkpoints)")
+    if (info.length && info[0].values) {
+      const colNames = info[0].values.map((row) => row[1])
+      if (!colNames.includes('benchmarks')) {
+        db.run("ALTER TABLE checkpoints ADD COLUMN benchmarks TEXT NOT NULL DEFAULT '{}'")
+      }
+    }
+  } catch (e) {
+    // checkpoints may not exist on a completely empty database before migration 1
+  }
+
+  db.run(`
+    CREATE TABLE IF NOT EXISTS ledger (
+      id         TEXT PRIMARY KEY,
+      sleeve     TEXT NOT NULL,
+      symbol     TEXT NOT NULL,
+      isin       TEXT,
+      name       TEXT,
+      trade_date TEXT NOT NULL,
+      side       TEXT NOT NULL CHECK (side IN ('buy', 'sell')),
+      qty        REAL NOT NULL,
+      price      REAL NOT NULL,
+      fx_rate    REAL NOT NULL DEFAULT 1,
+      currency   TEXT NOT NULL DEFAULT 'INR',
+      fees_inr   REAL NOT NULL DEFAULT 0,
+      source     TEXT
+    );
+    CREATE INDEX IF NOT EXISTS ledger_date ON ledger (trade_date);
+
+    CREATE TABLE IF NOT EXISTS manual_assets (
+      kind        TEXT NOT NULL,
+      name        TEXT NOT NULL,
+      as_of_date  TEXT NOT NULL,
+      value_inr   REAL NOT NULL,
+      liability   INTEGER NOT NULL DEFAULT 0,
+      note        TEXT,
+      PRIMARY KEY (kind, name, as_of_date)
+    );
+
+    CREATE TABLE IF NOT EXISTS ppf_deposits (
+      id           INTEGER PRIMARY KEY,
+      deposit_date TEXT NOT NULL,
+      amount_inr   REAL NOT NULL,
+      note         TEXT
+    );
+    CREATE TABLE IF NOT EXISTS ppf_rates (
+      quarter_start TEXT PRIMARY KEY,
+      rate_pct      REAL NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS benchmark_levels (
+      key        TEXT NOT NULL,
+      as_of_date TEXT NOT NULL,
+      level      REAL NOT NULL,
+      PRIMARY KEY (key, as_of_date)
+    );
+  `)
+}
+
 function migrate() {
   db.run('PRAGMA foreign_keys = ON')
   const has = db.exec("SELECT name FROM sqlite_master WHERE type='table' AND name='meta'").length > 0
@@ -49,6 +110,7 @@ function migrate() {
     db.run(MIGRATIONS[v])
     db.run('INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)', ['schema_version', String(v + 1)])
   }
+  ensureTables()
 }
 
 /** Open the database: restore it from IndexedDB, or start empty. */

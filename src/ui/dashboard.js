@@ -1,4 +1,4 @@
-import { networthSeries, allocationNow, transactionsAll, labelsMap, transactionCount, disposals } from '../repo.js'
+import { networthSeries, allocationNow, transactionsAll, labelsMap, transactionCount, disposals, cashflowView } from '../repo.js'
 import { expenseByLabel } from '../compute/expenses.js'
 import { lineChart, stackedBars, donut, sparkline } from './charts.js'
 import { compact, moneyExact, money, plain, shortDate, monthLabel, sleeveLabel, sleeveColor, labelColor, categoryColor, delta, esc } from './format.js'
@@ -19,7 +19,7 @@ function hero(series) {
     <div>
       <div class="hero-label">Total net worth</div>
       <div class="hero-figure" style="font-size:32px">${moneyExact(latest.total)}</div>
-      <div class="hero-secondary">${compact(latest.epf)} EPF · ${latest.ppf ? `${compact(latest.ppf)} PPF · ` : ''}${compact(latest.fd_accrued)} accrued FD interest · ${compact(latest.splitwise)} owed to you</div>
+      <div class="hero-secondary">${compact(latest.epf)} EPF · ${latest.ppf ? `${compact(latest.ppf)} PPF · ` : ''}${compact(latest.fd_accrued)} accrued FD interest · ${compact(latest.splitwise)} owed to you${latest.other_assets ? ` · ${compact(latest.other_assets)} other assets` : ''}${latest.loans ? ` · ${compact(latest.loans)} in loans` : ''}</div>
       <div class="hero-secondary" style="color:var(--muted);font-size:13px">Cash ${compact(latest.cash)} · Cards ${compact(latest.credit_card)} outstanding · As of ${shortDate(latest.as_of_date)}</div>
     </div>
   </div></section>`
@@ -35,6 +35,24 @@ function networthCard(series) {
   return `<section class="card"><header><h2>Net worth</h2></header>${chart}
     <div class="legend" style="font-size:15px"><span><i class="swatch" style="background:var(--ink)"></i>Total</span><span><i class="swatch" style="background:var(--sleeve-in_equity)"></i>Liquid</span></div>
     <p class="note">Total includes EPF, PPF, accrued FD interest and Splitwise receivables. Liquid is what could actually be turned into money.</p></section>`
+}
+
+function cashflowCard() {
+  const c = cashflowView()
+  if (!c || !c.months.length) return ''
+  const stat = (label, value, sub = '') => `<div><div class="hero-label">${label}</div><div class="hero-figure" style="font-size:28px">${value}</div>${sub ? `<div class="hero-secondary" style="margin-top:2px;font-size:13px">${sub}</div>` : ''}</div>`
+  const w = c.window
+  return `<section class="card"><header><h2>Savings and runway</h2></header>
+    ${w.months_used ? `<div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:20px">
+      ${stat('Savings rate', c.savings_rate_pct === null ? '—' : `${plain(c.savings_rate_pct, 1)}%`, `of income, last ${w.months_used} month${w.months_used === 1 ? '' : 's'}`)}
+      ${stat('Spend a month', compact(c.avg_spend), `income ${compact(c.avg_income)} a month`)}
+      ${stat('Runway', c.runway_months === null ? '—' : `${plain(c.runway_months, 1)} months`, 'liquid net worth ÷ monthly spend')}
+      ${stat('Runway, all-in', c.runway_months_total === null ? '—' : `${plain(c.runway_months_total, 1)} months`, 'total net worth ÷ monthly spend')}
+    </div>` : '<p class="note" style="margin-top:0">The headline figures need one full month of Wallet transactions before the current one.</p>'}
+    <div class="table-wrap" style="margin-top:16px"><table class="data"><thead><tr><th>Month</th><th class="num">Income</th><th class="num">Spend</th><th class="num">Saved</th><th class="num">Rate</th><th class="num">Invested</th></tr></thead><tbody>
+      ${c.months.slice(-6).reverse().map((m) => `<tr><td class="name">${esc(monthLabel(m.month))}</td><td class="num">${compact(m.income)}</td><td class="num">${compact(m.spend)}</td><td class="num">${delta(m.saved)}</td><td class="num">${m.savings_rate_pct === null ? '—' : `${plain(m.savings_rate_pct, 0)}%`}</td><td class="num">${compact(m.invested)}</td></tr>`).join('')}
+    </tbody></table></div>
+    <p class="note">Spend is what things cost you, net of money that came back, the same figure the chart above draws. Income is money in that isn't a transfer, an investment sale or a labelled refund. Money you invested counts as saved, since it is not gone. The month still under way is left out of the averages.</p></section>`
 }
 
 function allocationCard(a) {
@@ -85,7 +103,7 @@ export function render(el) {
   const series = networthSeries()
   const a = allocationNow()
   el.innerHTML = `<div class="grid" style="gap:16px">${hero(series)}${salesBanner()}
-    <div class="grid cols-3">${networthCard(series)}${allocationCard(a)}</div>${spendCard()}${rebalanceCard(a)}</div>`
+    <div class="grid cols-3">${networthCard(series)}${allocationCard(a)}</div>${cashflowCard()}${spendCard()}${rebalanceCard(a)}</div>`
   el.querySelector('svg [data-label]')?.closest('section') // (bars carry data-period/data-label for the Expenses drill-down)
   el.addEventListener('click', (e) => {
     const bar = e.target.closest('rect[data-period]')

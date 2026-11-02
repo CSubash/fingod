@@ -1,4 +1,4 @@
-import { connectorStatus, checkpoints, fixedDeposits, ppfDeposits, splitwise, targets, transactionCount } from '../repo.js'
+import { connectorStatus, checkpoints, fixedDeposits, ppfDeposits, splitwise, targets, transactionCount, ledgerRows, manualAssets, benchmarkHistory } from '../repo.js'
 import { exportBytes, importBytes, reset, getSetting } from '../db.js'
 import { syncInbox, ingestAny, inboxFailures, IngestError } from '../ingest.js'
 import { checkpointPrompt } from '../prompts.js'
@@ -27,7 +27,7 @@ export function render(el) {
   const draw = (log = failureLog()) => {
     const cps = checkpoints(), st = connectorStatus()
     el.innerHTML = `<div class="grid" style="gap:16px;max-width:860px">
-    <section class="card" style="${checkpointCollapsed ? 'padding: 18px 22px;' : ''}">
+    <section class="card" data-card="cp" ${checkpointCollapsed ? 'data-toggle-cp style="padding: 18px 22px; cursor: pointer;"' : ''}>
       <header style="display:flex;align-items:center;justify-content:space-between;cursor:pointer;user-select:none;margin:${checkpointCollapsed ? '0' : '0 0 14px'};" data-toggle-cp>
         <h2>Take a checkpoint</h2>
         <span style="display:inline-flex;align-items:center;justify-content:center;color:var(--muted);user-select:none;padding:4px" title="${checkpointCollapsed ? 'Expand Take a checkpoint' : 'Collapse Take a checkpoint'}">${chevron(checkpointCollapsed)}</span>
@@ -38,7 +38,7 @@ export function render(el) {
       </div>
     </section>
 
-    <section class="card" style="${whatsHereCollapsed ? 'padding: 18px 22px;' : ''}">
+    <section class="card" data-card="wh" ${whatsHereCollapsed ? 'data-toggle-wh style="padding: 18px 22px; cursor: pointer;"' : ''}>
       <header style="display:flex;align-items:center;justify-content:space-between;cursor:pointer;user-select:none;margin:${whatsHereCollapsed ? '0' : '0 0 14px'};" data-toggle-wh>
         <div style="display:flex;align-items:center;gap:10px">
           <h2>What's here</h2>
@@ -53,6 +53,9 @@ export function render(el) {
         <table class="data"><tbody>
           <tr><td class="name">Checkpoints</td><td class="num">${cps.length}${cps.length ? ` · latest ${shortDate(cps.at(-1).as_of_date)}` : ''}</td></tr>
           <tr><td class="name">Wallet transactions</td><td class="num">${transactionCount().toLocaleString('en-IN')}</td></tr>
+          <tr><td class="name">Trade ledger</td><td class="num">${ledgerRows().length ? `${ledgerRows().length.toLocaleString('en-IN')} trades` : '-'}</td></tr>
+          <tr><td class="name">Benchmark history</td><td class="num">${(() => { const h = benchmarkHistory(), ks = Object.keys(h); return ks.length ? ks.map((k) => `${k === 'sp500' ? 'S&P 500' : 'Nifty 50'} ${h[k].length} days`).join(' · ') : '-' })()}</td></tr>
+          <tr><td class="name">Other assets and loans</td><td class="num">${new Set(manualAssets().map((a) => `${a.kind}|${a.name}`)).size || '-'}</td></tr>
           <tr><td class="name">Fixed deposits</td><td class="num">${fixedDeposits().length}</td></tr>
           <tr><td class="name">PPF deposits</td><td class="num">${ppfDeposits().length}</td></tr>
           <tr><td class="name">Splitwise people</td><td class="num">${splitwise().length}</td></tr>
@@ -61,8 +64,7 @@ export function render(el) {
         </tbody></table>
       </div>
     </section>
-
-    <section class="card" style="${importCollapsed ? 'padding: 18px 22px;' : ''}">
+    <section class="card" data-card="imp" ${importCollapsed ? 'data-toggle-imp style="padding: 18px 22px; cursor: pointer;"' : ''}>
       <header style="display:flex;align-items:center;justify-content:space-between;cursor:pointer;user-select:none;margin:${importCollapsed ? '0' : '0 0 14px'};" data-toggle-imp>
         <h2>Import files</h2>
         <span style="display:inline-flex;align-items:center;justify-content:center;color:var(--muted);user-select:none;padding:4px" title="${importCollapsed ? 'Expand Import files' : 'Collapse Import files'}">${chevron(importCollapsed)}</span>
@@ -70,13 +72,13 @@ export function render(el) {
       <div style="display:${importCollapsed ? 'none' : 'block'};margin-top:10px">
         <p class="hero-secondary" style="margin-top:0">Files in <code>data/</code> import by themselves while the app is served from a local server (<code>python3 -m http.server ${location.port || 8000} --bind 127.0.0.1</code>). You can also import by hand: a checkpoint or transactions JSON from your agent, or a backup you exported.</p>
         <div class="actions"><button class="btn" data-sync>Sync now</button><button class="btn" data-pick>Choose files…</button><input type="file" multiple accept=".json,.sqlite,.db" hidden data-file></div>
-        <pre class="log" data-log>${esc(log)}</pre>${inboxFailures().length ? '<p class="note" style="color:var(--critical)">These files are in data/ but were not imported. Fix the named field and it imports on the next sync.</p>' : ''}
+        <pre class="log" data-log style="${log ? '' : 'display:none;'}">${esc(log)}</pre>${inboxFailures().length ? '<p class="note" style="color:var(--critical)">These files are in data/ but were not imported. Fix the named field and it imports on the next sync.</p>' : ''}
       </div>
     </section>
 
     ${manual.section()}
 
-    <section class="card" style="${backupCollapsed ? 'padding: 18px 22px;' : ''}">
+    <section class="card" data-card="bk" ${backupCollapsed ? 'data-toggle-bk style="padding: 18px 22px; cursor: pointer;"' : ''}>
       <header style="display:flex;align-items:center;justify-content:space-between;cursor:pointer;user-select:none;margin:${backupCollapsed ? '0' : '0 0 14px'};" data-toggle-bk>
         <h2>Backup & reset</h2>
         <span style="display:inline-flex;align-items:center;justify-content:center;color:var(--muted);user-select:none;padding:4px" title="${backupCollapsed ? 'Expand Backup & reset' : 'Collapse Backup & reset'}">${chevron(backupCollapsed)}</span>
@@ -90,7 +92,13 @@ export function render(el) {
   }
   draw()
   manual.bind(el, () => draw())
-  const logTo = (t) => { const n = el.querySelector('[data-log]'); if (n) n.textContent = t }
+  const logTo = (t) => {
+    const n = el.querySelector('[data-log]')
+    if (n) {
+      n.textContent = t
+      n.style.display = t ? 'block' : 'none'
+    }
+  }
   el.addEventListener('click', async (e) => {
     const toggleCp = e.target.closest('[data-toggle-cp]')
     if (toggleCp) { checkpointCollapsed = !checkpointCollapsed; draw(); return }
@@ -100,6 +108,18 @@ export function render(el) {
     if (toggleImp) { importCollapsed = !importCollapsed; draw(); return }
     const toggleBk = e.target.closest('[data-toggle-bk]')
     if (toggleBk) { backupCollapsed = !backupCollapsed; draw(); return }
+    const cardEl = e.target.closest('[data-card]')
+    if (cardEl && e.target === cardEl) {
+      const rect = cardEl.getBoundingClientRect()
+      const y = e.clientY - rect.top
+      if (y <= 50 || y >= rect.height - 40) {
+        const id = cardEl.dataset.card
+        if (id === 'cp') { checkpointCollapsed = true; draw(); return }
+        if (id === 'wh') { whatsHereCollapsed = true; draw(); return }
+        if (id === 'imp') { importCollapsed = true; draw(); return }
+        if (id === 'bk') { backupCollapsed = true; draw(); return }
+      }
+    }
     const c = e.target.closest('[data-copy]'); if (c) copy(el.querySelector(`#${c.dataset.copy}`).textContent, c)
     if (e.target.closest('[data-sync]')) {
       const r = await syncInbox()

@@ -58,7 +58,7 @@ export const ANTIGRAVITY_MCP_FORMAT = `{
     },
     "wallet": {
       "command": "npx",
-      "args": ["-y", "mcp-remote", "https://mcp.wallet.budgetbakers.com", "--header", "Authorization:${WALLET_AUTH}"],
+      "args": ["-y", "mcp-remote", "https://mcp.wallet.budgetbakers.com", "--header", "Authorization:\${WALLET_AUTH}"],
       "env": { "WALLET_AUTH": "Bearer $WALLET_MCP_TOKEN" }
     },
     "indmoney": {
