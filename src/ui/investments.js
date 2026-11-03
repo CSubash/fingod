@@ -27,6 +27,7 @@ export const COMPARISON_OPTIONS = [
   { id: 'nifty50', label: 'Nifty 50 Index', default: true },
   { id: 'nifty_midcap150', label: 'Nifty Midcap 150 Index', default: false },
   { id: 'nifty_smallcap250', label: 'Nifty Smallcap 250 Index', default: false },
+  { id: 'sp500', label: 'S&P 500 Index', default: false },
   { id: 'nasdaq100', label: 'Nasdaq 100 Index', default: false },
   { id: 'nyse_composite', label: 'NYSE Composite Index', default: false },
 ]
@@ -136,6 +137,7 @@ function indexed(v) {
     { id: 'nifty50', label: 'Nifty 50 Index' },
     { id: 'nifty_midcap150', label: 'Nifty Midcap 150 Index' },
     { id: 'nifty_smallcap250', label: 'Nifty Smallcap 250 Index' },
+    { id: 'sp500', label: 'S&P 500 Index' },
     { id: 'nasdaq100', label: 'Nasdaq 100 Index' },
     { id: 'nyse_composite', label: 'NYSE Composite Index' },
   ]

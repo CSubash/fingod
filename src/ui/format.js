@@ -30,6 +30,7 @@ export const SLEEVE_LABEL = {
   nifty50: 'Nifty 50',
   nifty_midcap150: 'Nifty Midcap 150',
   nifty_smallcap250: 'Nifty Smallcap 250',
+  sp500: 'S&P 500',
   nasdaq100: 'Nasdaq 100',
   nyse_composite: 'NYSE Composite',
 }
@@ -38,6 +39,7 @@ const EXTRA_COLORS = {
   nifty50: '#ffe119',
   nifty_midcap150: '#e6194B',
   nifty_smallcap250: '#fabed4',
+  sp500: '#fffac8',
   nasdaq100: '#42d4f4',
   nyse_composite: '#bfef45',
   in_equity: '#4363d8',
