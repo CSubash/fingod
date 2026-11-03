@@ -274,3 +274,11 @@ th[aria-sort='none'] .caret { opacity: 0.3; }
 /* A totals row reads as a conclusion, not another row of data. */
 table.data tfoot td { padding: 10px; color: var(--ink-2); font-weight: 500; }
 table.data tfoot td.num { font-variant-numeric: tabular-nums; }
+
+/* The sync pill in the top bar: green when data/ is being read, red when a file would not import, grey when it cannot be read. */
+.chip.sync { text-decoration: none; cursor: pointer; font-weight: 600; padding: 3px 12px 3px 10px; }
+.chip.sync .dot { width: 7px; height: 7px; margin-right: 7px; background: var(--muted); }
+.chip.sync.ok .dot { background: var(--good); }
+.chip.sync.bad { color: var(--critical); border-color: var(--critical); }
+.chip.sync.bad .dot { background: var(--critical); }
+.chip.sync:hover { border-color: var(--ring-strong); color: var(--ink); }

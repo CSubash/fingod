@@ -61,7 +61,8 @@ src/prompts.js       the setup prompt and the coding agents we ship config for
 src/ui/welcome.js    the empty state: how to start your agent, the demo, a file drop
 tests/               node:test; no dependencies
 docs/                DATA-FORMAT, ARCHITECTURE, MCP-SHAPES
-landing/             the static landing page (deployed separately)
+landing/             the static landing page (deployed with the demo: scripts/deploy-site.sh)
+scripts/             screenshot.mjs; stage-site.sh / deploy-site.sh stage landing + the app's demo under /app/ into .site/ and deploy
 ```
 
 ## Conventions
