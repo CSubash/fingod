@@ -243,5 +243,10 @@ python3 -m http.server 8000 --bind 127.0.0.1     # then open http://localhost:80
     });
   });
 </script>
+<script>
+// Deployed, the app lives at /app/. Opened straight from the repo (Live Server, python -m http.server), the landing page is
+// at /landing/ and the app is one level up, so point the demo links there instead of at a folder that does not exist.
+if (location.pathname.indexOf('/landing/') > -1) document.querySelectorAll('a[href="app/?demo"]').forEach(function (a) { a.setAttribute('href', '../?demo') })
+</script>
 </body>
 </html>
