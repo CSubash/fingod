@@ -57,8 +57,7 @@ export function render(el) {
     <section class="card"><header><h2>Realised profit</h2></header>${ts.length ? `
       <div class="grid stats">
         ${stat('Realised', delta(s.realised, money), `${s.return_pct === null ? '' : `${plain(s.return_pct)}% on ${compact(s.invested)} invested`}`)}
-        ${stat('Trades', s.trades, `${s.winners} won · ${s.losers} lost`)}
-        ${stat('Win rate', s.win_rate_pct === null ? '—' : `${s.win_rate_pct}%`)}
+        ${stat('Win rate', s.win_rate_pct === null ? '—' : `${s.win_rate_pct}%`, `${s.winners} won · ${s.losers} lost of ${s.trades} trades`)}
         ${stat('Gross wins / losses', `${compact(s.gross_wins)} / ${compact(s.gross_losses)}`, 'never netted off')}
         ${stat('Avg holding', s.avg_holding_days === null ? '—' : `${s.avg_holding_days} days`)}
       </div>
