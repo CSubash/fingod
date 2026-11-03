@@ -7,15 +7,18 @@
 
 :root,
 [data-theme='dark'] {
-  --page:        #0d0d0d;
-  --card:        #141416;
-  --ink:         #ffffff;
-  --ink-2:       #c3c2b7;
-  --muted:       #898781;
-  --gridline:    #2c2c2a;
-  --baseline:    #383835;
-  --ring:        rgba(255, 255, 255, 0.10);
-  --ring-strong: rgba(255, 255, 255, 0.18);
+  --page:        #0a1230;
+  --card:        #111a3f;
+  --ink:         #f4f6fc;
+  --ink-2:       #b9c0dc;
+  --muted:       #8a93b8;
+  --gridline:    #212b58;
+  --baseline:    #2e3a6b;
+  --ring:        rgba(190, 200, 240, 0.10);
+  --ring-strong: rgba(190, 200, 240, 0.20);
+  --accent:      #459af8;
+  --shadow:      0 1px 7px rgba(2, 6, 24, 0.25), 0 9px 18px rgba(2, 6, 24, 0.35);
+  --noise:       none;
 
   /* Sleeve colours — fixed per entity, assigned in this order, never cycled.
    * Validated with the dataviz palette validator against #141416: all seven
@@ -69,15 +72,21 @@
 }
 
 [data-theme='light'] {
-  --page:        #f4f3f0;
-  --card:        #faf9f7;
-  --ink:         #0b0b0b;
-  --ink-2:       #52514e;
-  --muted:       #898781;
-  --gridline:    #e1e0d9;
-  --baseline:    #c3c2b7;
-  --ring:        rgba(11, 11, 11, 0.10);
-  --ring-strong: rgba(11, 11, 11, 0.18);
+  /* Soft periwinkle paper, white cards, deep navy ink: the Fold look. The page is a
+   * cool grey-blue rather than white so a white card lifts off it with a shadow, not a rule. */
+  --page:        #eef0f6;
+  --card:        #ffffff;
+  --ink:         #20294c;
+  --ink-2:       #4a5279;
+  --muted:       #6b7090;
+  --gridline:    #e4e7f1;
+  --baseline:    #c7cbdb;
+  --ring:        rgba(32, 41, 76, 0.08);
+  --ring-strong: rgba(32, 41, 76, 0.20);
+  --accent:      #118ae4;
+  --shadow:      0 1px 7px rgba(32, 41, 76, 0.03), 0 9px 18px rgba(32, 41, 76, 0.10);
+  /* A whisper of paper grain, as on fold.money; an inline SVG so there is no image to ship. */
+  --noise:       url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .13 0 0 0 0 .16 0 0 0 0 .3 0 0 0 .05 0'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)'/%3E%3C/svg%3E");
 
   /* Light passes every check except contrast, where us_equity, gold and fd sit
    * at 2.06–2.68:1 on #faf9f7. That WARN is **not dismissable**: it obligates
@@ -104,9 +113,9 @@
   --cat-6: #e87ba4;
   --cat-7: #6f68d8;
   --cat-8: #008300;
-  --cat-other:    #898781;   /* 3.41:1 on #faf9f7 */
-  --cat-untagged: #5c5a56;   /* 6.54:1 — light mode inverts which is darker */
+  --cat-other:    #8b90ab;
+  --cat-untagged: #5c6180;   /* light mode inverts which is darker */
 
-  --good:     #0a8a0a;
+  --good:     #0f8f4a;
   --critical: #c22f2f;
 }

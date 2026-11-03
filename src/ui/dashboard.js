@@ -1,5 +1,6 @@
 import { networthSeries, allocationNow, transactionsAll, labelsMap, transactionCount, disposals, cashflowView } from '../repo.js'
 import { expenseByLabel } from '../compute/expenses.js'
+import { paginate, scrollBox, bindPager } from './pager.js'
 import { lineChart, stackedBars, donut, sparkline } from './charts.js'
 import { compact, moneyExact, money, plain, shortDate, monthLabel, sleeveLabel, sleeveColor, labelColor, delta, esc } from './format.js'
 
@@ -41,6 +42,7 @@ function cashflowCard() {
   if (!c || !c.months.length) return ''
   const stat = (label, value, sub = '') => `<div><div class="hero-label">${label}</div><div class="hero-figure" style="font-size:28px">${value}</div>${sub ? `<div class="hero-secondary" style="margin-top:2px;font-size:13px">${sub}</div>` : ''}</div>`
   const w = c.window
+  const pg = paginate('cashflow-months', c.months.slice().reverse(), { size: 10 })
   return `<section class="card"><header><h2>Savings and runway</h2></header>
     ${w.months_used ? `<div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:20px">
       ${stat('Savings rate', c.savings_rate_pct === null ? '—' : `${plain(c.savings_rate_pct, 1)}%`, `of income, last ${w.months_used} month${w.months_used === 1 ? '' : 's'}`)}
@@ -48,9 +50,9 @@ function cashflowCard() {
       ${stat('Runway', c.runway_months === null ? '—' : `${plain(c.runway_months, 1)} months`, 'liquid net worth ÷ monthly spend')}
       ${stat('Runway, all-in', c.runway_months_total === null ? '—' : `${plain(c.runway_months_total, 1)} months`, 'total net worth ÷ monthly spend')}
     </div>` : '<p class="note" style="margin-top:0">The headline figures need one full month of Wallet transactions before the current one.</p>'}
-    <div class="table-wrap" style="margin-top:16px"><table class="data"><thead><tr><th>Month</th><th class="num">Income</th><th class="num">Spend</th><th class="num">Saved</th><th class="num">Rate</th><th class="num">Invested</th></tr></thead><tbody>
-      ${c.months.slice(-6).reverse().map((m) => `<tr><td class="name">${esc(monthLabel(m.month))}</td><td class="num">${compact(m.income)}</td><td class="num">${compact(m.spend)}</td><td class="num">${delta(m.saved)}</td><td class="num">${m.savings_rate_pct === null ? '—' : `${plain(m.savings_rate_pct, 0)}%`}</td><td class="num">${compact(m.invested)}</td></tr>`).join('')}
-    </tbody></table></div>
+    <div style="margin-top:16px">${scrollBox(`<table class="data"><thead><tr><th>Month</th><th class="num">Income</th><th class="num">Spend</th><th class="num">Saved</th><th class="num">Rate</th><th class="num">Invested</th></tr></thead><tbody>
+      ${pg.rows.map((m) => `<tr><td class="name">${esc(monthLabel(m.month))}</td><td class="num">${compact(m.income)}</td><td class="num">${compact(m.spend)}</td><td class="num">${delta(m.saved)}</td><td class="num">${m.savings_rate_pct === null ? '—' : `${plain(m.savings_rate_pct, 0)}%`}</td><td class="num">${compact(m.invested)}</td></tr>`).join('')}
+    </tbody></table>`)}${pg.controls}</div>
     <p class="note">Spend is what things cost you, net of money that came back, the same figure the chart above draws. Income is money in that isn't a transfer, an investment sale or a labelled refund. Money you invested counts as saved, since it is not gone. The month still under way is left out of the averages.</p></section>`
 }
 
@@ -94,8 +96,12 @@ function salesBanner() {
 export function render(el) {
   const series = networthSeries()
   const a = allocationNow()
-  el.innerHTML = `<div class="grid" style="gap:16px">${hero(series)}${salesBanner()}
+  const draw = () => {
+    el.innerHTML = `<div class="grid" style="gap:16px">${hero(series)}${salesBanner()}
     <div class="grid cols-3">${networthCard(series)}${allocationCard(a)}</div>${cashflowCard()}${spendCard()}${rebalanceCard(a)}</div>`
+  }
+  draw()
+  bindPager(el, draw)
   el.querySelector('svg [data-label]')?.closest('section') // (bars carry data-period/data-label for the Expenses drill-down)
   el.addEventListener('click', (e) => {
     const bar = e.target.closest('rect[data-period]')

@@ -1,6 +1,7 @@
 import { transactionsAll, labelsMap, transactionCount } from '../repo.js'
 import { expenseByLabel, breakdown, listTransactions, UNTAGGED } from '../compute/expenses.js'
 import { stackedBars } from './charts.js'
+import { paginate, scrollBox, bindPager } from './pager.js'
 import { compact, moneyExact, money, plain, shortDate, monthLabel, labelColor, esc } from './format.js'
 
 let gran = 'month'
@@ -13,11 +14,12 @@ function readHash() {
   if (q.get('period')) { drill.period = q.get('period'); drill.label = q.get('label'); drill.category = drill.subcategory = null }
 }
 
-function list(title, rows, total, picked, attr, colorFor) {
-  return `<section class="card"><header><h2>${title}</h2></header><div class="table-wrap"><table class="data"><tbody>
+function list(id, title, allRows, total, picked, attr, colorFor) {
+  const pg = paginate(id, allRows, { size: 10 }), rows = pg.rows
+  return `<section class="card"><header><h2>${title}</h2></header>${scrollBox(`<table class="data"><tbody>
     ${rows.map((r) => `<tr class="${picked === r.key ? 'picked' : ''}"><td class="name"><button class="row-btn" data-${attr}="${esc(r.key)}">${colorFor ? `<i class="dot" style="background:${colorFor(r.key)}"></i>` : ''}<span class="name">${esc(r.key)}</span></button></td>
       <td style="width:110px"><span class="minibar"><span style="width:${total ? (r.amount / total) * 100 : 0}%"></span></span></td><td class="num">${money(r.amount)}</td><td class="num" style="color:var(--muted)">${r.count}</td></tr>`).join('') || '<tr><td class="empty" colspan="4">Nothing here.</td></tr>'}
-    </tbody></table></div></section>`
+    </tbody></table>`)}${pg.controls}</section>`
 }
 
 export function render(el) {
@@ -30,7 +32,8 @@ export function render(el) {
     const base = { period: drill.period, granularity: gran, label: drill.label }
     const byCat = breakdown(txns, labels, { ...base, by: 'category', category: drill.category })
     const byLabel = breakdown(txns, labels, { period: drill.period, granularity: gran, by: 'label', category: drill.category, subcategory: drill.subcategory })
-    const rows = listTransactions(txns, labels, { ...base, category: drill.category, subcategory: drill.subcategory, limit: 60 })
+    const rows = listTransactions(txns, labels, { ...base, category: drill.category, subcategory: drill.subcategory, limit: Infinity })
+    const pg = paginate('expenses-txns', rows, { size: 25 })
     const crumbs = [
       { text: drill.period ? periodLabel(drill.period) : 'All periods', on: () => { drill.category = drill.subcategory = null } },
       drill.category && { text: drill.category, on: () => { drill.subcategory = null } },
@@ -43,13 +46,14 @@ export function render(el) {
       <p class="note">Click a bar to drill into that period. Bars are net of money that came back under the same label; transfers between your own accounts and Investments are excluded.</p></section>
     <section class="card" style="padding:14px 22px"><div class="crumbs">${crumbs.map((c, i) => `${i ? '<span class="sep">›</span>' : ''}${i < crumbs.length - 1 ? `<button class="crumb" data-crumb="${i}">${esc(c.text)}</button>` : `<span class="crumb current">${esc(c.text)}</span>`}`).join('')}
       ${drill.label ? `<button class="btn" style="margin-left:10px" data-clear-label>label: ${esc(drill.label)} ✕</button>` : ''}${drill.period ? '<button class="btn" style="margin-left:auto" data-reset>Clear</button>' : ''}</div></section>
-    <div class="grid cols-2">${list(drill.category ? `${esc(drill.category)} — subcategories` : 'Categories', byCat.rows, byCat.total, drill.subcategory || drill.category, 'cat', null)}${list('Labels', byLabel.rows, byLabel.total, drill.label, 'label', labelColor)}</div>
-    <section class="card"><header><h2>Transactions</h2><span class="spacer"></span><span class="hero-label">${rows.length === 60 ? 'latest 60' : `${rows.length}`}</span></header><div class="table-wrap"><table class="data"><tbody>
-      ${rows.map((t) => `<tr><td class="num" style="text-align:left;white-space:nowrap">${shortDate(t.txn_date)}</td><td class="name">${esc(t.note || t.category || '—')}<div style="color:var(--muted);font-size:12px">${esc(t.category_top || '')}${t.category ? ` · ${esc(t.category)}` : ''} · ${esc(t.account || '')}</div></td><td>${t.labels.map((l) => `<span class="tag">${esc(l)}</span>`).join('')}</td><td class="num">${moneyExact(-t.amount_inr)}</td></tr>`).join('') || '<tr><td class="empty">No transactions.</td></tr>'}
-      </tbody></table></div></section></div>`
+    <div class="grid cols-2">${list('expenses-cats', drill.category ? `${esc(drill.category)} — subcategories` : 'Categories', byCat.rows, byCat.total, drill.subcategory || drill.category, 'cat', null)}${list('expenses-labels', 'Labels', byLabel.rows, byLabel.total, drill.label, 'label', labelColor)}</div>
+    <section class="card"><header><h2>Transactions</h2><span class="spacer"></span><span class="hero-label">${rows.length.toLocaleString('en-IN')}</span></header>${scrollBox(`<table class="data"><tbody>
+      ${pg.rows.map((t) => `<tr><td class="num" style="text-align:left;white-space:nowrap">${shortDate(t.txn_date)}</td><td class="name">${esc(t.note || t.category || '—')}<div style="color:var(--muted);font-size:12px">${esc(t.category_top || '')}${t.category ? ` · ${esc(t.category)}` : ''} · ${esc(t.account || '')}</div></td><td>${t.labels.map((l) => `<span class="tag">${esc(l)}</span>`).join('')}</td><td class="num">${moneyExact(-t.amount_inr)}</td></tr>`).join('') || '<tr><td class="empty">No transactions.</td></tr>'}
+      </tbody></table>`)}${pg.controls}</section></div>`
     el._crumbs = crumbs
   }
   draw()
+  bindPager(el, draw)
   el.addEventListener('click', (e) => {
     const g = e.target.closest('[data-gran]'); if (g) { gran = g.dataset.gran; Object.assign(drill, { period: null, category: null, subcategory: null }); return draw() }
     const bar = e.target.closest('rect[data-period]'); if (bar) { Object.assign(drill, { period: bar.dataset.period, label: bar.dataset.label === UNTAGGED ? UNTAGGED : bar.dataset.label, category: null, subcategory: null }); return draw() }
