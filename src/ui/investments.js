@@ -39,9 +39,9 @@ function incomeCard() {
     periods: i.months.map((m) => ({ period: m.month, label: monthLabel(m.month), segments: Object.fromEntries(kinds.map(([k]) => [k, m[k]])) })),
     keys: kinds.map(([k]) => k).reverse(), color: (k) => INCOME_KINDS.find(([x]) => x === k)[2], yFormat: compact, title: 'Dividends and interest received by month', link: false,
   })
-  const stat = (label, value, sub) => `<div><div class="hero-label">${label}</div><div class="hero-figure" style="font-size:28px">${value}</div><div class="hero-secondary" style="margin-top:2px;font-size:13px">${sub}</div></div>`
+  const stat = (label, value, sub) => `<div><div class="hero-label">${label}</div><div class="hero-figure">${value}</div><div class="hero-secondary" style="margin-top:2px;font-size:13px">${sub}</div></div>`
   return `<section class="card"><header><h2>Income from investments — last 12 months</h2></header>
-    <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:20px;margin-bottom:12px">
+    <div class="grid stats" style="margin-bottom:12px">
       ${stat('Received', moneyExact(i.total), `${monthLabel(i.from)} to ${monthLabel(i.to)}`)}
       ${stat('A month', compact(i.monthly_avg), `paid in ${i.months_paid} of 12 months`)}
       ${stat('Dividends', compact(i.dividends), i.payers.length ? `from ${i.payers.length} payer${i.payers.length === 1 ? '' : 's'}` : 'none noted')}

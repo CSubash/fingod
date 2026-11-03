@@ -9,7 +9,7 @@ import { daysBetween } from '../compute/num.js'
 let gran = 'month'
 
 function stat(label, value, sub = '') {
-  return `<div><div class="hero-label">${label}</div><div class="hero-figure" style="font-size:28px">${value}</div>${sub ? `<div class="hero-secondary" style="margin-top:2px;font-size:13px">${sub}</div>` : ''}</div>`
+  return `<div><div class="hero-label">${label}</div><div class="hero-figure">${value}</div>${sub ? `<div class="hero-secondary" style="margin-top:2px;font-size:13px">${sub}</div>` : ''}</div>`
 }
 
 function detected(d) {
@@ -55,8 +55,8 @@ export function render(el) {
     const periods = byPeriod([...ts].reverse(), gran)
     el.innerHTML = `<div class="grid" style="gap:16px">${detected(d)}${capitalGains(ledgerView())}
     <section class="card"><header><h2>Realised profit</h2></header>${ts.length ? `
-      <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:20px">
-        ${stat('Realised', delta(s.realised, moneyExact), `${s.return_pct === null ? '' : `${plain(s.return_pct)}% on ${compact(s.invested)} invested`}`)}
+      <div class="grid stats">
+        ${stat('Realised', delta(s.realised, money), `${s.return_pct === null ? '' : `${plain(s.return_pct)}% on ${compact(s.invested)} invested`}`)}
         ${stat('Trades', s.trades, `${s.winners} won · ${s.losers} lost`)}
         ${stat('Win rate', s.win_rate_pct === null ? '—' : `${s.win_rate_pct}%`)}
         ${stat('Gross wins / losses', `${compact(s.gross_wins)} / ${compact(s.gross_losses)}`, 'never netted off')}

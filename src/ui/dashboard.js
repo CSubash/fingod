@@ -40,11 +40,11 @@ function networthCard(series) {
 function cashflowCard() {
   const c = cashflowView()
   if (!c || !c.months.length) return ''
-  const stat = (label, value, sub = '') => `<div><div class="hero-label">${label}</div><div class="hero-figure" style="font-size:28px">${value}</div>${sub ? `<div class="hero-secondary" style="margin-top:2px;font-size:13px">${sub}</div>` : ''}</div>`
+  const stat = (label, value, sub = '') => `<div><div class="hero-label">${label}</div><div class="hero-figure">${value}</div>${sub ? `<div class="hero-secondary" style="margin-top:2px;font-size:13px">${sub}</div>` : ''}</div>`
   const w = c.window
   const pg = paginate('cashflow-months', c.months.slice().reverse(), { size: 10 })
   return `<section class="card"><header><h2>Savings and runway</h2></header>
-    ${w.months_used ? `<div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:20px">
+    ${w.months_used ? `<div class="grid stats">
       ${stat('Savings rate', c.savings_rate_pct === null ? '—' : `${plain(c.savings_rate_pct, 1)}%`, `of income, last ${w.months_used} month${w.months_used === 1 ? '' : 's'}`)}
       ${stat('Spend a month', compact(c.avg_spend), `income ${compact(c.avg_income)} a month`)}
       ${stat('Runway', c.runway_months === null ? '—' : `${plain(c.runway_months, 1)} months`, 'liquid net worth ÷ monthly spend')}

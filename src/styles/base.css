@@ -56,6 +56,9 @@ body {
   font-size: 44px; font-weight: 700; letter-spacing: -0.03em;
   line-height: 1.1; margin: 2px 0 6px;
 }
+.grid.stats { grid-template-columns: repeat(auto-fit, minmax(215px, 1fr)); gap: 20px 24px; }
+/* A figure never breaks across lines ("▲ +" on one and the amount on the next): the tile grows, or the row wraps whole tiles. */
+.grid.stats .hero-figure { font-size: 26px; white-space: nowrap; }
 .hero-label { color: var(--muted); font-size: 13px; }
 .hero-secondary { color: var(--ink-2); font-size: 15px; margin-top: 10px; }
 
