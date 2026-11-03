@@ -22,7 +22,7 @@ let cleanup = null, rerenderTimer = null, showSeq = 0
 
 const needsWelcome = () => !hasData()
 
-const theme = () => localStorage.getItem('fingod-theme') || 'dark'
+const theme = () => localStorage.getItem('fingod-theme') || 'light'
 const applyTheme = () => document.documentElement.setAttribute('data-theme', theme())
 
 function route() {

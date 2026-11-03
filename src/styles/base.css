@@ -8,7 +8,8 @@ body {
   margin: 0;
   background: var(--page);
   color: var(--ink);
-  font: 15px/1.5 -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  font: 15px/1.5 'Avenir Next', ui-rounded, 'SF Pro Rounded', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  background-image: var(--noise);
   -webkit-font-smoothing: antialiased;
 }
 
@@ -22,7 +23,7 @@ body {
   display: flex; align-items: baseline; gap: 16px;
   margin-bottom: 24px;
 }
-.topbar h1 { font-size: 19px; font-weight: 600; margin: 0; letter-spacing: -0.01em; }
+.topbar h1 { font-size: 22px; font-weight: 800; margin: 0; letter-spacing: -0.03em; }
 .topbar .sub { color: var(--muted); font-size: 13px; }
 .topbar .spacer { flex: 1; }
 
@@ -33,48 +34,53 @@ body {
   .grid.cols-2, .grid.cols-3 { grid-template-columns: 1fr; }
 }
 
-/* Cards: 16px radius, 20–24px padding, one hairline ring, no drop shadows. */
+/* Cards: big soft corners, a hairline ring and one soft navy shadow that lifts them off the page. */
 .card {
   background: var(--card);
   border: 1px solid var(--ring);
-  border-radius: 16px;
-  padding: 22px;
+  border-radius: 24px;
+  padding: 26px;
+  box-shadow: var(--shadow);
 }
 .card > header {
   display: flex; align-items: center; gap: 10px;
   margin: 0 0 14px;
 }
 .card h2 {
-  font-size: 13px; font-weight: 600; letter-spacing: 0.02em;
-  text-transform: uppercase; color: var(--muted); margin: 0;
+  font-size: 15px; font-weight: 700; letter-spacing: -0.005em;
+  color: var(--ink-2); margin: 0;
 }
 .card header .spacer { flex: 1; }
 
 .hero-figure {
-  font-size: 44px; font-weight: 600; letter-spacing: -0.02em;
+  font-size: 44px; font-weight: 700; letter-spacing: -0.03em;
   line-height: 1.1; margin: 2px 0 6px;
 }
+.grid.stats { grid-template-columns: repeat(auto-fit, minmax(215px, 1fr)); gap: 20px 24px; }
+/* A figure never breaks across lines ("▲ +" on one and the amount on the next): the tile grows, or the row wraps whole tiles. */
+.grid.stats .hero-figure { font-size: 26px; white-space: nowrap; }
 .hero-label { color: var(--muted); font-size: 13px; }
 .hero-secondary { color: var(--ink-2); font-size: 15px; margin-top: 10px; }
 
 .chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
 .chip {
   display: inline-flex; align-items: center; gap: 6px;
-  border: 1px solid var(--ring); border-radius: 999px;
-  padding: 4px 11px; font-size: 12.5px; color: var(--ink-2);
+  border: 1px solid var(--ring); border-radius: 999px; background: var(--card);
+  padding: 4px 12px; font-size: 12.5px; color: var(--ink-2);
 }
 .chip .val { font-variant-numeric: tabular-nums; font-weight: 600; }
 .chip.good .val { color: var(--good); }
 .chip.bad  .val { color: var(--critical); }
 
 .btn {
-  background: transparent; color: var(--ink-2);
-  border: 1px solid var(--ring); border-radius: 8px;
-  padding: 4px 10px; font-size: 12px; cursor: pointer;
-  font-family: inherit;
+  background: var(--card); color: var(--ink);
+  border: 1px solid var(--ring-strong); border-radius: 999px;
+  padding: 5px 14px; font-size: 12.5px; font-weight: 600; cursor: pointer;
+  font-family: inherit; box-shadow: 0 1px 3px rgba(32, 41, 76, 0.08);
+  transition: box-shadow .12s ease, border-color .12s ease;
 }
-.btn:hover { border-color: var(--ring-strong); color: var(--ink); }
-.btn[aria-pressed='true'] { color: var(--ink); border-color: var(--ring-strong); }
+.btn:hover { border-color: var(--ink-2); box-shadow: 0 2px 8px rgba(32, 41, 76, 0.14); }
+.btn[aria-pressed='true'] { background: var(--ink); color: var(--page); border-color: var(--ink); }
 
 table.data { width: 100%; border-collapse: collapse; font-size: 13.5px; }
 /* Holdings tables run to eleven columns once a sleeve carries both currencies
@@ -82,9 +88,12 @@ table.data { width: 100%; border-collapse: collapse; font-size: 13.5px; }
    table beats wrapping headers or shrinking type below legibility. */
 .table-wrap { overflow-x: auto; }
 .table-wrap > table.data { min-width: 100%; width: auto; }
+/* A long list scrolls inside its card instead of stretching the page; the header stays put. */
+.table-wrap.scroll { max-height: 460px; overflow-y: auto; scrollbar-width: thin; scrollbar-color: var(--baseline) transparent; }
+.table-wrap.scroll table.data th { position: sticky; top: 0; z-index: 1; background: var(--card); }
 table.data th {
-  text-align: left; font-weight: 500; color: var(--muted);
-  font-size: 12px; text-transform: uppercase; letter-spacing: 0.02em;
+  text-align: left; font-weight: 600; color: var(--muted);
+  font-size: 12px; text-transform: uppercase; letter-spacing: 0.04em;
   padding: 6px 10px 8px; border-bottom: 1px solid var(--gridline);
   /* A wrapped header pushes its own row to two lines and drags every other
      column's baseline with it. Wide tables scroll instead — see .table-wrap. */
@@ -132,13 +141,13 @@ table.data td.name { color: var(--ink); }
 
 .empty {
   color: var(--muted); font-size: 13.5px; padding: 26px 4px; text-align: center;
-  border: 1px dashed var(--gridline); border-radius: 12px;
+  border: 1px dashed var(--baseline); border-radius: 16px;
 }
 
 .tooltip {
   background: var(--card); border: 1px solid var(--ring-strong);
-  border-radius: 10px; padding: 9px 11px; font-size: 12.5px;
-  color: var(--ink); box-shadow: none;
+  border-radius: 14px; padding: 9px 12px; font-size: 12.5px;
+  color: var(--ink); box-shadow: var(--shadow);
 }
 .tooltip .row { display: flex; gap: 14px; justify-content: space-between; }
 .tooltip .row .v { font-variant-numeric: tabular-nums; }
@@ -165,7 +174,7 @@ table.data td.name { color: var(--ink); }
 .row-btn:hover .name { color: var(--ink); text-decoration: underline; }
 .row-btn:focus-visible { outline: 2px solid var(--ring-strong); outline-offset: 3px; border-radius: 4px; }
 
-tr.picked td { background: rgba(127, 127, 127, 0.09); }
+tr.picked td { background: color-mix(in srgb, var(--accent) 9%, transparent); }
 tr.picked .name { color: var(--ink); font-weight: 600; }
 
 .dot {
@@ -187,14 +196,15 @@ tr.picked .name { color: var(--ink); font-weight: 600; }
 }
 
 .tabs { display: flex; gap: 4px; }
+/* Navigation reads as a row of pills; the page you are on is the filled one. */
 .tab {
-  background: none; border: none; border-bottom: 2px solid transparent;
-  padding: 4px 2px; margin-right: 14px; font: inherit; font-size: 14px;
+  background: none; border: none; border-radius: 999px;
+  padding: 6px 14px; margin-right: 2px; font: inherit; font-size: 14px; font-weight: 600;
   color: var(--muted); cursor: pointer; text-decoration: none;
   display: inline-block;
 }
-.tab:hover { color: var(--ink-2); }
-.tab[aria-current='page'] { color: var(--ink); border-bottom-color: var(--ink); }
+.tab:hover { color: var(--ink); background: var(--ring); }
+.tab[aria-current='page'] { color: var(--page); background: var(--ink); }
 
 /* Sortable headers. The whole label is the target, not just the caret. */
 .sort-btn {
