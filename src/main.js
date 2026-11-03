@@ -77,7 +77,13 @@ async function poll() {
     const el = document.getElementById('syncstate')
     const bad = inboxFailures()
     if (el) {
-      el.innerHTML = bad.length ? `<a href="#/data" style="color:var(--critical)" title="${esc(bad.map((b) => `${b.path}: ${b.error}`).join('\n'))}">⚠ ${bad.length === 1 ? esc(bad[0].path) : `${bad.length} files in data/`} couldn't be imported</a>` : esc(isDemo() ? '' : r.available ? `Synced from data/ · ${new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}` : 'Not reading data/ · start it with python3 serve.py')
+      const state = isDemo() ? null : bad.length ? ['bad', 'Sync issue', bad.map((b) => `${b.path}: ${b.error}`).join('\n')]
+        : r.available ? ['ok', 'Synced', `Last checked ${new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', second: '2-digit' })}`]
+        : ['off', 'Not synced', 'Not reading data/. Start the app with python3 serve.py to import files.']
+      // Redrawing every poll would reset a tooltip the pointer is resting on, so only a change of state rebuilds it.
+      const key = state ? `${state[0]}${state[1]}` : ''
+      if (el.dataset.key !== key) { el.dataset.key = key; el.innerHTML = state ? `<a class="chip sync ${state[0]}" href="#/data"><i class="dot"></i>${esc(state[1])}</a>` : '' }
+      if (state) el.firstElementChild.title = state[2]
     }
     if (r.imported.length && route() !== 'welcome') show()
   } catch (e) { console.error(e) }
