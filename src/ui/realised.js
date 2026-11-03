@@ -57,7 +57,7 @@ export function render(el) {
     <section class="card"><header><h2>Realised profit</h2></header>${ts.length ? `
       <div class="grid stats">
         ${stat('Realised', delta(s.realised, money), `${s.return_pct === null ? '' : `${plain(s.return_pct)}% on ${compact(s.invested)} invested`}`)}
-        ${stat('Win rate', s.win_rate_pct === null ? '—' : `${s.win_rate_pct}%`, `<span class="minibar" style="display:flex;gap:2px;margin:6px 0 5px;background:none" title="${s.winners} won, ${s.losers} lost"><span style="flex:${s.winners};background:var(--good)"></span><span style="flex:${s.losers};background:var(--critical)"></span></span>${s.winners}W · ${s.losers}L · ${s.trades} trades`)}
+        ${stat('Win rate', s.win_rate_pct === null ? '—' : `${s.win_rate_pct}%`, `<span class="minibar" style="display:flex;gap:2px;margin:6px 0 5px;background:none" title="${s.winners} won, ${s.losers} lost"><span style="flex:${s.winners};background:var(--good)"></span><span style="flex:${s.losers};background:var(--critical)"></span></span>${s.winners}/${s.trades}`)}
         ${stat('Gross wins / losses', `${compact(s.gross_wins)} / ${compact(s.gross_losses)}`, 'never netted off')}
         ${stat('Avg holding', s.avg_holding_days === null ? '—' : `${s.avg_holding_days} days`)}
       </div>
