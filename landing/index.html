@@ -113,7 +113,7 @@
 <div class="stripe" aria-hidden="true"></div>
 <header class="site"><nav class="wrap bar" aria-label="Main">
   <a class="logo" href="#top" aria-label="fingod, home"><svg viewBox="0 0 64 64" aria-hidden="true"><rect width="64" height="64" rx="14" fill="#101012"/><path d="M12 46 L24 34 L33 40 L52 18" fill="none" stroke="#3987e5" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/><circle cx="52" cy="18" r="4.5" fill="#fff"/></svg>fingod</a>
-  <div class="links"><a href="#screens">Screens</a><a href="#setup">Set up</a><a href="#faq">FAQ</a></div>
+  <div class="links"><a href="app/?demo">Live demo</a><a href="#screens">Screens</a><a href="#setup">Set up</a><a href="#faq">FAQ</a></div>
   <a class="gh" href="https://github.com/HarishTeens/fingod" rel="noopener"><svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>GitHub</a>
 </nav></header>
 
@@ -122,7 +122,8 @@
   <div class="eyebrow">CH 00 · Local-first net worth tracking</div>
   <h1>Your net worth, <em>on your own machine.</em></h1>
   <p class="lede">Connects Wallet, Zerodha, Groww and INDmoney through your coding assistant, then shows what actually grew and what you simply added. It runs in your browser. No account, no server, no cloud.</p>
-  <div class="cta"><a class="btn primary" href="#setup">Set it up with your assistant →</a><a class="btn" href="https://github.com/HarishTeens/fingod" rel="noopener">View on GitHub</a></div>
+  <div class="cta"><a class="btn primary" href="app/?demo">Try the live demo →</a><a class="btn" href="#setup">Set it up with your assistant</a><a class="btn" href="https://github.com/HarishTeens/fingod" rel="noopener">View on GitHub</a></div>
+  <p class="demo-note" style="margin:14px 0 0;color:var(--muted);font-size:13.5px">The demo runs in your browser on invented numbers. Nothing is sent anywhere.</p>
   <div class="works"><span>Works with</span><span class="pill">Wallet</span><span class="pill">Zerodha Kite</span><span class="pill">Groww</span><span class="pill">INDmoney</span></div>
 </div></section>
 
@@ -241,6 +242,11 @@ python3 -m http.server 8000 --bind 127.0.0.1     # then open http://localhost:80
       copy(id === 'prompt' ? (promptText || promptEl.textContent) : document.getElementById(id).textContent.trim(), btn);
     });
   });
+</script>
+<script>
+// Deployed, the app lives at /app/. Opened straight from the repo (Live Server, python -m http.server), the landing page is
+// at /landing/ and the app is one level up, so point the demo links there instead of at a folder that does not exist.
+if (location.pathname.indexOf('/landing/') > -1) document.querySelectorAll('a[href="app/?demo"]').forEach(function (a) { a.setAttribute('href', '../?demo') })
 </script>
 </body>
 </html>

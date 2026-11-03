@@ -83,9 +83,17 @@ export function labelColor(label) {
   return `var(--cat-${slots.get(label) + 1})`
 }
 
+export function deltaIcon(positive) {
+  return positive
+    ? `<svg width="0.72em" height="0.72em" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="4" stroke-linejoin="round" style="display:inline-block;vertical-align:-0.05em;flex-shrink:0"><polygon points="12,5 3.5,19 20.5,19"/></svg>`
+    : `<svg width="0.72em" height="0.72em" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="4" stroke-linejoin="round" style="display:inline-block;vertical-align:-0.05em;flex-shrink:0"><polygon points="12,19 3.5,5 20.5,5"/></svg>`
+}
+
 /** ▲ +₹4.2k  /  ▼ −₹974 - status is icon + signed value + colour, never colour alone. */
 export function delta(v, fmt = compact) {
   const n = num(v)
   if (n === 0) return `<span class="tnum">${fmt(0)}</span>`
-  return `<span class="tnum" style="color:var(--${n > 0 ? 'good' : 'critical'})">${n > 0 ? '▲' : '▼'} ${n > 0 ? '+' : '−'}${fmt(Math.abs(n)).replace('−', '')}</span>`
+  const isPos = n > 0
+  const icon = deltaIcon(isPos)
+  return `<span class="tnum" style="color:var(--${isPos ? 'good' : 'critical'});display:inline-flex;align-items:center;gap:0.2em">${icon}<span>${isPos ? '+' : '−'}${fmt(Math.abs(n)).replace('−', '')}</span></span>`
 }

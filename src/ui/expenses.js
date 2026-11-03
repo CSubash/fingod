@@ -1,6 +1,7 @@
 import { transactionsAll, labelsMap, transactionCount } from '../repo.js'
 import { expenseByLabel, breakdown, listTransactions, UNTAGGED } from '../compute/expenses.js'
 import { stackedBars } from './charts.js'
+import { paginate, scrollBox, bindPager } from './pager.js'
 import { compact, moneyExact, money, plain, shortDate, monthLabel, labelColor, categoryColor, CATEGORY_COLORS, esc } from './format.js'
 
 let gran = 'month'
@@ -31,11 +32,12 @@ function readHash(allLabelNames) {
   }
 }
 
-function list(title, rows, total, picked, attr, colorFor) {
-  return `<section class="card"><header><h2>${title}</h2></header><div class="table-wrap"><table class="data"><tbody>
+function list(id, title, allRows, total, picked, attr, colorFor) {
+  const pg = paginate(id, allRows, { size: 10 }), rows = pg.rows
+  return `<section class="card"><header><h2>${title}</h2></header>${scrollBox(`<table class="data"><tbody>
     ${rows.map((r) => `<tr class="${picked === r.key ? 'picked' : ''}"><td class="name"><button class="row-btn" data-${attr}="${esc(r.key)}">${colorFor ? `<i class="dot" style="background:${colorFor(r.key)}"></i>` : ''}<span class="name">${esc(r.key)}</span></button></td>
       <td style="width:110px"><span class="minibar"><span style="width:${total ? (r.amount / total) * 100 : 0}%"></span></span></td><td class="num">${money(r.amount)}</td><td class="num" style="color:var(--muted)">${r.count}</td></tr>`).join('') || '<tr><td class="empty" colspan="4">Nothing here.</td></tr>'}
-    </tbody></table></div></section>`
+    </tbody></table>`)}${pg.controls}</section>`
 }
 
 export function render(el) {
@@ -57,7 +59,8 @@ export function render(el) {
     const base = { period: drill.period, granularity: gran, label: drill.label }
     const byCat = breakdown(txns, labels, { ...base, by: 'category', category: drill.category })
     const byLabel = breakdown(txns, labels, { period: drill.period, granularity: gran, by: 'label', category: drill.category, subcategory: drill.subcategory })
-    const rows = listTransactions(txns, labels, { ...base, category: drill.category, subcategory: drill.subcategory, limit: 60 })
+    const rows = listTransactions(txns, labels, { ...base, category: drill.category, subcategory: drill.subcategory, limit: Infinity })
+    const pg = paginate('expenses-txns', rows, { size: 50 })
     const crumbs = [
       { text: drill.period ? periodLabel(drill.period) : 'All periods', on: () => { drill.category = drill.subcategory = null } },
       drill.category && { text: drill.category, on: () => { drill.subcategory = null } },
@@ -68,8 +71,8 @@ export function render(el) {
     const spendTitle = `${granTitle} spend by ${hasLabels ? 'label' : 'category'}`
 
     const onlyUntagged = !byLabel.rows.length || byLabel.rows.every((r) => r.key === UNTAGGED)
-    const catCard = list(drill.category ? `${esc(drill.category)} - subcategories` : 'Categories', byCat.rows, byCat.total, drill.subcategory || drill.category, 'cat', categoryColor)
-    const labelCard = onlyUntagged ? '' : list('Labels', byLabel.rows, byLabel.total, drill.label, 'label', labelColor)
+    const catCard = list('expenses-cats', drill.category ? `${esc(drill.category)} - subcategories` : 'Categories', byCat.rows, byCat.total, drill.subcategory || drill.category, 'cat', categoryColor)
+    const labelCard = onlyUntagged ? '' : list('expenses-labels', 'Labels', byLabel.rows, byLabel.total, drill.label, 'label', labelColor)
     const middleSection = onlyUntagged ? catCard : `<div class="grid cols-2">${catCard}${labelCard}</div>`
 
     el.innerHTML = `<div class="grid" style="gap:16px">
@@ -88,8 +91,8 @@ export function render(el) {
       ${drill.category ? `<button class="btn" style="margin-left:10px" data-clear-cat>category: ${esc(drill.category)} ✕</button>` : ''}
       ${drill.period || drill.label || drill.category ? '<button class="btn" style="margin-left:auto" data-reset>Clear</button>' : ''}</div></section>
     ${middleSection}
-    <section class="card"><header><h2>Transactions</h2><span class="spacer"></span><span class="hero-label">${rows.length === 60 ? 'latest 60' : `${rows.length}`}</span></header><div class="table-wrap"><table class="data"><tbody>
-      ${rows.map((t) => {
+    <section class="card"><header><h2>Transactions</h2><span class="spacer"></span><span class="hero-label">${rows.length.toLocaleString('en-IN')}</span></header>${scrollBox(`<table class="data"><tbody>
+      ${pg.rows.map((t) => {
         const tagHtml = t.labels.length
           ? t.labels.map((l) => `<span class="tag" style="border-left:3px solid ${labelColor(l)};padding-left:6px">${esc(l)}</span>`).join(' ')
           : `<span class="tag" style="border-left:3px solid ${categoryColor(t.category)};padding-left:6px">${esc(t.category || 'Untagged')}</span>`
@@ -98,10 +101,11 @@ export function render(el) {
           <td>${tagHtml}</td>
           <td class="num">${moneyExact(-t.amount_inr)}</td></tr>`
       }).join('') || '<tr><td class="empty">No transactions.</td></tr>'}
-      </tbody></table></div></section></div>`
+      </tbody></table>`)}${pg.controls}</section></div>`
     el._crumbs = crumbs
   }
   draw()
+  bindPager(el, draw)
   el.addEventListener('click', (e) => {
     const g = e.target.closest('[data-gran]'); if (g) { gran = g.dataset.gran; Object.assign(drill, { period: null, category: null, subcategory: null }); return draw() }
     const bar = e.target.closest('rect[data-period]');

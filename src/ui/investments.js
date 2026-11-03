@@ -1,5 +1,6 @@
 import { investmentsView, incomeView, RANGE_IDS } from '../repo.js'
-import { lineChart, stackedBars, bindHighlight } from './charts.js'
+import { paginate, scrollBox, bindPager } from './pager.js'
+import { lineChart, stackedBars, bindHighlight } from './charts.js' 
 import { compact, moneyExact, plain, pct, shortDate, monthLabel, sleeveLabel, sleeveColor, delta, esc, money } from './format.js'
 import { HISTORICAL_INDEX } from '../data_benchmarks.js'
 import { daysBetween } from '../compute/num.js'
@@ -188,21 +189,22 @@ const INCOME_KINDS = [['dividends', 'Dividends', 'var(--cat-1)'], ['interest', '
 function incomeCard() {
   const i = incomeView()
   if (!i) return ''
+  const pg = paginate('income-payers', i.payers, { size: 10 })
   const kinds = INCOME_KINDS.filter(([k]) => i[k] > 0)
   const chart = stackedBars({
     periods: i.months.map((m) => ({ period: m.month, label: monthLabel(m.month), segments: Object.fromEntries(kinds.map(([k]) => [k, m[k]])) })),
     keys: kinds.map(([k]) => k).reverse(), color: (k) => INCOME_KINDS.find(([x]) => x === k)[2], yFormat: compact, title: 'Dividends and interest received by month', link: false,
   })
-  const stat = (label, value, sub) => `<div><div class="hero-label">${label}</div><div class="hero-figure" style="font-size:28px">${value}</div><div class="hero-secondary" style="margin-top:2px;font-size:13px">${sub}</div></div>`
+  const stat = (label, value, sub) => `<div><div class="hero-label">${label}</div><div class="hero-figure">${value}</div><div class="hero-secondary" style="margin-top:2px;font-size:13px">${sub}</div></div>`
   return `<section class="card"><header><h2>Income from investments — last 12 months</h2></header>
-    <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:20px;margin-bottom:12px">
+    <div class="grid stats" style="margin-bottom:12px">
       ${stat('Received', moneyExact(i.total), `${monthLabel(i.from)} to ${monthLabel(i.to)}`)}
       ${stat('A month', compact(i.monthly_avg), `paid in ${i.months_paid} of 12 months`)}
       ${stat('Dividends', compact(i.dividends), i.payers.length ? `from ${i.payers.length} payer${i.payers.length === 1 ? '' : 's'}` : 'none noted')}
       ${stat('Interest', compact(i.interest), i.unspecified ? `plus ${compact(i.unspecified)} with no note` : 'bank and FD interest')}
     </div>${chart}
     <div class="legend">${kinds.map(([, l, c]) => `<span><i class="swatch" style="background:${c}"></i>${l}</span>`).join('')}</div>
-    ${i.payers.length ? `<div class="table-wrap" style="margin-top:12px"><table class="data"><thead><tr><th>Biggest dividend payers</th><th class="num">Received</th><th class="num">Share</th></tr></thead><tbody>${i.payers.slice(0, 8).map((p) => `<tr><td class="name">${esc(p.name)}</td><td class="num">${compact(p.amount)}</td><td class="num">${plain((p.amount / i.dividends) * 100, 0)}%</td></tr>`).join('')}</tbody></table></div>` : ''}
+    ${i.payers.length ? `<div style="margin-top:12px">${scrollBox(`<table class="data"><thead><tr><th>Biggest dividend payers</th><th class="num">Received</th><th class="num">Share</th></tr></thead><tbody>${pg.rows.map((p) => `<tr><td class="name">${esc(p.name)}</td><td class="num">${compact(p.amount)}</td><td class="num">${plain((p.amount / i.dividends) * 100, 0)}%</td></tr>`).join('')}</tbody></table>`)}${pg.controls}</div>` : ''}
     <p class="note">Everything Wallet files under "Interest, dividends", counted when the money arrived. A credit you never entered in Wallet is not here. Wallet has no field for which it was, so the split reads the note: "interest" or "FD" means interest, any other note is read as a dividend from that name, and a credit with no note is shown separately rather than guessed. This is cash received, not a yield, and it makes no forecast.</p></section>`
 }
 
@@ -239,9 +241,11 @@ function holdingsTable(s) {
     return 0
   })
 
-  return `<section class="card"><header><h2>${esc(sleeveLabel(s.sleeve))} - holdings</h2><span class="spacer"></span>
+  const pg = paginate(`holdings-${s.sleeve}`, list, { size: 25 })
+  return `<section class="card"><header><h2>${esc(sleeveLabel(s.sleeve))} — holdings</h2><span class="spacer"></span>
+    <span class="hero-label" style="margin-right:12px">${s.holdings.length}</span>
     <button class="btn" data-open="${s.sleeve}">Hide holdings</button></header>
-    <div class="table-wrap"><table class="data"><thead><tr>
+    ${scrollBox(`<table class="data"><thead><tr>
       <th style="cursor:pointer;user-select:none" data-holdings-sort="name">Holding ${holdingsSortIcon('name')}</th>
       <th class="num" style="cursor:pointer;user-select:none" data-holdings-sort="qty">Qty ${holdingsSortIcon('qty')}</th>
       <th class="num" style="cursor:pointer;user-select:none" data-holdings-sort="price">Price ${holdingsSortIcon('price')}</th>
@@ -253,21 +257,21 @@ function holdingsTable(s) {
       <th style="cursor:pointer;user-select:none" data-holdings-sort="account">Account ${holdingsSortIcon('account')}</th>
       <th style="cursor:pointer;user-select:none" data-holdings-sort="currency">Currency ${holdingsSortIcon('currency')}</th>
     </tr></thead><tbody>
-    ${list.map((h) => {
+    ${pg.rows.map((h) => {
       const buyDate = getBuyDate(h)
       const hDays = getHoldingDays(h)
-      return `<tr><td class="name"><b>${esc(h.symbol)}</b> <span style="color:var(--muted)">${esc(h.name && h.name !== h.symbol ? h.name : '')}</span></td>
-      <td class="num">${plain(h.qty, 4)}</td>
+      return `<tr><td class="name"><b>${esc(h.symbol)}</b> <span style="color:var(--muted)">${esc(h.name && h.name !== h.symbol ? h.name : '')}</span>${h.flagged ? ' <span class="tag" title="Flow above 25% of the sleeve: a split or bonus?">flow flag</span>' : ''}</td>
+      <td class="num">${plain(h.qty, h.qty % 1 ? 4 : 0)}</td>
       <td class="num">${moneyExact(h.price, h.currency)}</td>
       <td class="num">${money(h.value)}</td>
-      <td class="num">${h.invested === null ? '-' : money(h.invested)}</td>
-      <td class="num">${h.return_pct === null ? '-' : `${delta(h.return_pct, (n) => `${plain(n)}%`)}<div style="color:var(--muted);font-size:12px">${compact(h.unrealised)}</div>`}</td>
-      <td class="num" style="color:${buyDate ? 'var(--ink)' : 'var(--muted)'};font-size:12.5px">${buyDate ? formatDdmmyy(buyDate) : '-'}</td>
-      <td class="num" style="color:${hDays !== null ? 'var(--ink)' : 'var(--muted)'};font-size:12.5px">${hDays !== null ? `${hDays} days` : '-'}</td>
-      <td>${esc(h.account || '-')}</td>
+      <td class="num">${h.invested === null ? '—' : money(h.invested)}</td>
+      <td class="num">${h.return_pct === null ? '—' : `${delta(h.return_pct, (n) => `${plain(n)}%`)}<div style="color:var(--muted);font-size:12px">${compact(h.unrealised)}</div>`}</td>
+      <td class="num" style="color:${buyDate ? 'var(--ink)' : 'var(--muted)'};font-size:12.5px">${buyDate ? formatDdmmyy(buyDate) : '—'}</td>
+      <td class="num" style="color:${hDays !== null ? 'var(--ink)' : 'var(--muted)'};font-size:12.5px">${hDays !== null ? `${hDays} days` : '—'}</td>
+      <td>${esc(h.account || '—')}</td>
       <td>${esc(h.currency || 'INR')}</td></tr>`
     }).join('')}
-    </tbody></table></div></section>`
+    </tbody></table>`)}${pg.controls}</section>`
 }
 
 export function render(el) {
@@ -294,7 +298,7 @@ export function render(el) {
   }
   draw()
   bindHighlight(el)
-
+  bindPager(el, draw)
   el.addEventListener('click', (e) => {
     const sToggle = e.target.closest('[data-series-toggle]')
     if (sToggle) {
