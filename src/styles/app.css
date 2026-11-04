@@ -24,22 +24,29 @@ input:focus-visible { outline: 2px solid var(--ring-strong); outline-offset: 1px
 :root[data-theme='light'] .btn.primary,
 [data-theme='light'] .btn.primary,
 :root[data-theme='light'] #theme,
-[data-theme='light'] #theme {
-  background: #000000;
-  color: #ffffff;
-  border-color: #000000;
+[data-theme='light'] #theme,
+:root[data-theme='light'] .btn[aria-pressed='true'],
+[data-theme='light'] .btn[aria-pressed='true'] {
+  background: var(--ink);
+  color: var(--page);
+  border-color: var(--ink);
 }
 :root[data-theme='light'] .btn.primary:hover,
 [data-theme='light'] .btn.primary:hover,
 :root[data-theme='light'] #theme:hover,
-[data-theme='light'] #theme:hover {
+[data-theme='light'] #theme:hover,
+:root[data-theme='light'] .btn[aria-pressed='true']:hover,
+[data-theme='light'] .btn[aria-pressed='true']:hover {
   opacity: .88;
-  color: #ffffff;
+  color: var(--page);
+  background: var(--ink);
+  border-color: var(--ink);
 }
 
 button[data-range][aria-pressed='true'],
 button[data-gran][aria-pressed='true'],
-button[data-agent][aria-pressed='true'] {
+button[data-agent][aria-pressed='true'],
+button[data-perf-range][aria-pressed='true'] {
   background: #ffffff;
   color: #000000;
   border-color: #ffffff;
@@ -51,11 +58,26 @@ button[data-agent][aria-pressed='true'] {
 :root[data-theme='light'] button[data-gran][aria-pressed='true'],
 [data-theme='light'] button[data-gran][aria-pressed='true'],
 :root[data-theme='light'] button[data-agent][aria-pressed='true'],
-[data-theme='light'] button[data-agent][aria-pressed='true'] {
-  background: #000000;
-  color: #ffffff;
-  border-color: #000000;
+[data-theme='light'] button[data-agent][aria-pressed='true'],
+:root[data-theme='light'] button[data-perf-range][aria-pressed='true'],
+[data-theme='light'] button[data-perf-range][aria-pressed='true'] {
+  background: var(--ink);
+  color: var(--page);
+  border-color: var(--ink);
   font-weight: 600;
+}
+:root[data-theme='light'] button[data-range][aria-pressed='true']:hover,
+[data-theme='light'] button[data-range][aria-pressed='true']:hover,
+:root[data-theme='light'] button[data-gran][aria-pressed='true']:hover,
+[data-theme='light'] button[data-gran][aria-pressed='true']:hover,
+:root[data-theme='light'] button[data-agent][aria-pressed='true']:hover,
+[data-theme='light'] button[data-agent][aria-pressed='true']:hover,
+:root[data-theme='light'] button[data-perf-range][aria-pressed='true']:hover,
+[data-theme='light'] button[data-perf-range][aria-pressed='true']:hover {
+  opacity: .88;
+  color: var(--page);
+  background: var(--ink);
+  border-color: var(--ink);
 }
 .btn.big { padding: 11px 22px; font-size: 14px; }
 .btn:disabled { opacity: .4; cursor: default; }

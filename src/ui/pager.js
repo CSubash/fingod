@@ -17,9 +17,9 @@ export function paginate(id, rows, { size = 25 } = {}) {
   const controls = rows.length <= Math.min(...SIZES) ? '' : `<div class="pager" data-pager="${esc(id)}">
     <span class="pager-count">${from + 1}–${Math.min(from + s.size, rows.length)} of ${rows.length.toLocaleString('en-IN')}</span><span class="spacer"></span>
     <label class="pager-size">Rows <select data-pg-size>${SIZES.map((n) => `<option value="${n}" ${n === s.size ? 'selected' : ''}>${n}</option>`).join('')}</select></label>
-    <button class="btn" data-pg="-1" ${s.page === 0 ? 'disabled' : ''} aria-label="Previous page">‹</button>
+    <button class="btn" data-pg="-1" ${s.page === 0 ? 'disabled' : ''} aria-label="Previous page"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="display:block;pointer-events:none"><polyline points="15 18 9 12 15 6"/></svg></button>
     <span class="pager-page">${s.page + 1} / ${pages}</span>
-    <button class="btn" data-pg="1" ${s.page >= pages - 1 ? 'disabled' : ''} aria-label="Next page">›</button></div>`
+    <button class="btn" data-pg="1" ${s.page >= pages - 1 ? 'disabled' : ''} aria-label="Next page"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="display:block;pointer-events:none"><polyline points="9 18 15 12 9 6"/></svg></button></div>`
   return { rows: rows.slice(from, from + s.size), controls }
 }
 

@@ -63,7 +63,7 @@ export function fifo(rows) {
   const open = new Map()
   for (const [key, book] of lots) open.set(key, { ...info.get(key), qty: sum(book.map((l) => l.qty)), cost: money(sum(book.map((l) => l.qty * l.unit_cost))) })
   for (const [key, i] of info) if (!open.has(key)) open.set(key, { ...i, qty: 0, cost: 0 })
-  return { disposals, unmatched, open }
+  return { disposals, unmatched, open, lots }
 }
 
 export function termOf(d) {

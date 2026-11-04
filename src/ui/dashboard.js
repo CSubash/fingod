@@ -46,13 +46,13 @@ function cashflowCard() {
   const pg = paginate('cashflow-months', c.months.slice().reverse(), { size: 10 })
   return `<section class="card"><header><h2>Savings and runway</h2></header>
     ${w.months_used ? `<div class="grid stats">
-      ${stat('Savings rate', c.savings_rate_pct === null ? '—' : `${plain(c.savings_rate_pct, 1)}%`, `of income, last ${w.months_used} month${w.months_used === 1 ? '' : 's'}`)}
+      ${stat('Savings rate', c.savings_rate_pct === null ? '-' : `${plain(c.savings_rate_pct, 1)}%`, `of income, last ${w.months_used} month${w.months_used === 1 ? '' : 's'}`)}
       ${stat('Spend a month', compact(c.avg_spend), `income ${compact(c.avg_income)} a month`)}
-      ${stat('Runway', c.runway_months === null ? '—' : `${plain(c.runway_months, 1)} months`, 'liquid net worth ÷ monthly spend')}
-      ${stat('Runway, all-in', c.runway_months_total === null ? '—' : `${plain(c.runway_months_total, 1)} months`, 'total net worth ÷ monthly spend')}
+      ${stat('Runway', c.runway_months === null ? '-' : `${plain(c.runway_months, 1)} months`, 'liquid net worth ÷ monthly spend')}
+      ${stat('Runway, all-in', c.runway_months_total === null ? '-' : `${plain(c.runway_months_total, 1)} months`, 'total net worth ÷ monthly spend')}
     </div>` : '<p class="note" style="margin-top:0">The headline figures need one full month of Wallet transactions before the current one.</p>'}
     <div style="margin-top:16px">${scrollBox(`<table class="data"><thead><tr><th>Month</th><th class="num">Income</th><th class="num">Spend</th><th class="num">Saved</th><th class="num">Rate</th><th class="num">Invested</th></tr></thead><tbody>
-      ${pg.rows.map((m) => `<tr><td class="name">${esc(monthLabel(m.month))}</td><td class="num">${compact(m.income)}</td><td class="num">${compact(m.spend)}</td><td class="num">${delta(m.saved)}</td><td class="num">${m.savings_rate_pct === null ? '—' : `${plain(m.savings_rate_pct, 0)}%`}</td><td class="num">${compact(m.invested)}</td></tr>`).join('')}
+      ${pg.rows.map((m) => `<tr><td class="name">${esc(monthLabel(m.month))}</td><td class="num">${compact(m.income)}</td><td class="num">${compact(m.spend)}</td><td class="num">${delta(m.saved)}</td><td class="num">${m.savings_rate_pct === null ? '-' : `${plain(m.savings_rate_pct, 0)}%`}</td><td class="num">${compact(m.invested)}</td></tr>`).join('')}
     </tbody></table>`)}${pg.controls}</div>
     <p class="note">Spend is what things cost you, net of money that came back, the same figure the chart above draws. Income is money in that isn't a transfer, an investment sale or a labelled refund. Money you invested counts as saved, since it is not gone. The month still under way is left out of the averages.</p></section>`
 }
@@ -77,7 +77,7 @@ function spendCard() {
   const color = isAllUntagged ? categoryColor : labelColor
   const recent = series.slice(-MONTHS_SHOWN)
   const chart = stackedBars({ periods: recent.map((p) => ({ ...p, label: monthLabel(p.period) })), keys: names.slice().reverse(), color, yFormat: compact, title })
-  return `<section class="card"><header><h2>${title}</h2><span class="spacer"></span><a class="btn" href="#/expenses">Explore</a></header>${chart}
+  return `<section class="card"><header><h2>${title}</h2><span class="spacer"></span><a class="btn primary" href="#/expenses">Explore</a></header>${chart}
     <div class="legend">${names.map((l) => `<span><i class="swatch" style="background:${color(l)}"></i>${esc(l)}</span>`).join('')}</div>
     <p class="note">${isAllUntagged ? 'Spend grouped by category. Transfers between your own accounts and Investments are excluded.' : 'Net of money that came back: income tagged with the same label is subtracted, so a bar is what something <i>cost</i> you. Transfers between your own accounts and Investments are excluded.'}</p></section>`
 }

@@ -165,3 +165,79 @@ export function epfReturns(balances, at, prevBalances) {
   }
   return out
 }
+
+/** The NPS sleeve, built from balances (kind='nps') or manual_assets (kind='nps').
+ * Contributions are flow, and growth above invested amount is interest (market). */
+export function npsReturns(balances, at, prevBalances, assets = []) {
+  const npsBalances = (balances || []).filter((b) => b.kind === 'nps')
+  const npsAssets = (assets || []).filter((a) => a.kind === 'nps' && !a.liability && a.as_of_date <= at)
+
+  let rows = []
+  if (npsBalances.length) {
+    const sh = shares(npsBalances.map((b) => num(b.amount_inr)))
+    rows = npsBalances.map((b, i) => {
+      const val = money(num(b.amount_inr))
+      let meta = {}
+      if (b.meta) {
+        try { meta = typeof b.meta === 'string' ? JSON.parse(b.meta) : b.meta } catch {}
+      }
+      const inv = money(meta && meta.invested_inr !== undefined && meta.invested_inr !== null
+        ? num(meta.invested_inr)
+        : (b.invested_inr !== undefined && b.invested_inr !== null ? num(b.invested_inr) : num(b.amount_inr)))
+      const unrealised = money(val - inv)
+      return {
+        sleeve: 'nps', symbol: b.ref || 'NPS', name: b.ref || 'NPS',
+        qty: 1, price: val, currency: 'INR',
+        value: val, invested: inv, unrealised,
+        return_pct: inv ? pct(unrealised, inv) : 0,
+        share_pct: sh[i] || 0, market: null, flagged: false,
+      }
+    })
+  } else if (npsAssets.length) {
+    const latestByName = new Map()
+    for (const a of npsAssets) {
+      if (!latestByName.has(a.name) || latestByName.get(a.name).as_of_date < a.as_of_date) {
+        latestByName.set(a.name, a)
+      }
+    }
+    const list = [...latestByName.values()]
+    const sh = shares(list.map((a) => num(a.value_inr)))
+    rows = list.map((a, i) => {
+      const val = money(num(a.value_inr))
+      const inv = val
+      return {
+        sleeve: 'nps', symbol: a.name, name: a.name,
+        qty: 1, price: val, currency: 'INR',
+        value: val, invested: inv, unrealised: 0,
+        return_pct: 0, share_pct: sh[i] || 0, market: null, flagged: false,
+      }
+    })
+  }
+  if (!rows.length) return null
+  rows.sort((a, b) => b.value - a.value)
+  const value = money(sum(rows.map((r) => r.value)))
+  const invested = money(sum(rows.map((r) => r.invested)))
+  const unrealised = money(value - invested)
+  const out = {
+    sleeve: 'nps', value, invested, unrealised,
+    return_pct: invested ? pct(unrealised, invested) : 0,
+    partial: false, holdings: rows, market: unrealised, flow: invested, fx: null, delta: unrealised,
+  }
+  if (prevBalances) {
+    const prevNps = prevBalances.filter((b) => b.kind === 'nps')
+    if (prevNps.length) {
+      const prevVal = money(sum(prevNps.map((b) => num(b.amount_inr))))
+      const prevInv = money(sum(prevNps.map((b) => {
+        let meta = {}
+        if (b.meta) {
+          try { meta = typeof b.meta === 'string' ? JSON.parse(b.meta) : b.meta } catch {}
+        }
+        return meta && meta.invested_inr !== undefined && meta.invested_inr !== null ? num(meta.invested_inr) : num(b.amount_inr)
+      })))
+      const flow = money(invested - prevInv)
+      const delta = money(value - prevVal)
+      Object.assign(out, { delta, flow, fx: 0, market: money(delta - flow) })
+    }
+  }
+  return out
+}

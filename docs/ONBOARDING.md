@@ -148,8 +148,17 @@ now*), so they are at the keyboard when the link appears. Then:
   read the accounts, then **ask what each one is** with selectable questions, batched up to 4 accounts per call:
   *"What is 'Salary account'?"* → *Cash* / *Credit card* / *Ignore (e.g. a fixed deposit)*. Put your best guess
   from the name and type **first and label it "(Recommended)"**, but the user decides, and never guess silently: a
-  fixed deposit looks like a salary account. Remember
-  the answers in `data/config.json`, then page the records and write `data/transactions/wallet-<today>.json`.
+  fixed deposit looks like a salary account.
+
+  Then ask two selectable questions to configure how Wallet records are used:
+  1. *"Are stock buying details recorded in your Wallet transactions?"*
+     → *Yes (Recommended)* / *No*
+     If yes, use that data for stock purchase dates ("Invested on"). If no, fingod will not show the "Invested on" column in the holdings table.
+  2. *"Are dividend credits recorded in your Wallet transactions?"*
+     → *Yes (Recommended)* / *No*
+     If yes, the "Income from investments" card is shown. If no, fingod will not show the "Income from investments" card.
+
+  Record these preferences into `data/standing/manual.json` under `"settings": { "wallet_has_stock_buys": boolean, "wallet_has_dividends": boolean }` (and remember account mappings in `data/config.json`), then page the records and write `data/transactions/wallet-<today>.json`.
 - **Zerodha Kite.** Call `get_profile`; if it says to log in, call `login`. It returns a single-use link and a risk
   warning. **Show the warning** the tool tells you to show, then **show the link in a clickable form**:
   - Print it as a Markdown link, `[Login to Kite](<url>)`, so it is clickable in terminals that support hyperlinks.

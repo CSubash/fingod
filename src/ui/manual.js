@@ -149,8 +149,8 @@ function ppfSection() {
               ${ppfDropdownOpen ? `
                 <div style="position:absolute;top:calc(100% + 4px);left:0;z-index:100;background:var(--card);border:1px solid var(--ring-strong);border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,0.3);min-width:230px;padding:8px">
                   <div style="display:flex;justify-content:space-between;align-items:center;padding:2px 4px 8px;border-bottom:1px solid var(--gridline);margin-bottom:6px">
-                    <button type="button" class="btn ${allPpfSelected ? 'primary' : ''}" data-ppf-select-all style="padding:2px 8px;font-size:11.5px;${allPpfSelected ? 'background:#ffffff;color:#000000;border-color:#ffffff;font-weight:600;' : ''}">Select all</button>
-                    <button type="button" class="btn ${noPpfSelected ? 'primary' : ''}" data-ppf-clear-all style="padding:2px 8px;font-size:11.5px;${noPpfSelected ? 'background:#ffffff;color:#000000;border-color:#ffffff;font-weight:600;' : ''}">Clear all</button>
+                    <button type="button" class="btn ${allPpfSelected ? 'primary' : ''}" data-ppf-select-all style="padding:2px 8px;font-size:11.5px;">Select all</button>
+                    <button type="button" class="btn ${noPpfSelected ? 'primary' : ''}" data-ppf-clear-all style="padding:2px 8px;font-size:11.5px;">Clear all</button>
                   </div>
                   <div style="max-height:220px;overflow-y:auto;display:flex;flex-direction:column;gap:2px">
                     ${depFys.map((fy) => {

@@ -25,6 +25,7 @@ export function computeNetWorth({ asOf, holdings, balances, fixedDeposits, ppf, 
   const cash = byKind('bank') + byKind('cash')
   const card = Math.abs(byKind('credit_card'))
   const epf = byKind('epf')
+  const nps = byKind('nps')
   const splitwise = byKind('splitwise')
   let principal = 0, fdAccrued = 0
   for (const fd of (fixedDeposits || []).filter((f) => isLive(f, asOf))) {
@@ -32,15 +33,15 @@ export function computeNetWorth({ asOf, holdings, balances, fixedDeposits, ppf, 
     fdAccrued += accrued(fd, asOf)
   }
   const ppfValue = ppf && ppf.deposits && ppf.deposits.length ? ppfBalance(ppf.deposits, ppf.rates || [], asOf).value : 0
-  const other = sum(assets.filter((a) => !a.liability).map((a) => num(a.value_inr)))
+  const other = sum(assets.filter((a) => !a.liability && (nps === 0 || a.kind !== 'nps')).map((a) => num(a.value_inr)))
   const loans = sum(assets.filter((a) => a.liability).map((a) => num(a.value_inr)))
   const liquid = investments + cash + principal - card
-  const total = liquid + epf + ppfValue + fdAccrued + splitwise + other - loans
+  const total = liquid + epf + nps + ppfValue + fdAccrued + splitwise + other - loans
   return {
     as_of_date: asOf,
     liquid: money(liquid), total: money(total),
     sleeves: Object.fromEntries(Object.entries(sleeveSums).map(([k, v]) => [k, money(v)])),
-    cash: money(cash), credit_card: money(card), epf: money(epf), ppf: money(ppfValue), splitwise: money(splitwise),
+    cash: money(cash), credit_card: money(card), epf: money(epf), nps: money(nps), ppf: money(ppfValue), splitwise: money(splitwise),
     fd_principal: money(principal), fd_accrued: money(fdAccrued), investments: money(investments),
     other_assets: money(other), loans: money(loans),
   }

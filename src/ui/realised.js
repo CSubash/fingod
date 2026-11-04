@@ -51,7 +51,7 @@ function sales(all) {
 
 function capitalGains(v) {
   if (!v) return ''
-  const yr = (y) => `<tr><td class="name">${esc(y.fy)}</td><td class="num">${y.disposals}</td><td class="num">${delta(y.st)}</td><td class="num">${delta(y.lt)}</td><td class="num">${y.slab_gain ? delta(y.slab_gain) : '—'}</td><td class="num">${y.est_tax ? money(y.est_tax) : '—'}${y.notes.length ? `<div style="color:var(--muted);font-size:12px;max-width:260px;margin-left:auto">${esc(y.notes.join('; '))}</div>` : ''}</td></tr>`
+  const yr = (y) => `<tr><td class="name">${esc(y.fy)}</td><td class="num">${y.disposals}</td><td class="num">${delta(y.st)}</td><td class="num">${delta(y.lt)}</td><td class="num">${y.slab_gain ? delta(y.slab_gain) : '-'}</td><td class="num">${y.est_tax ? money(y.est_tax) : '-'}${y.notes.length ? `<div style="color:var(--muted);font-size:12px;max-width:260px;margin-left:auto">${esc(y.notes.join('; '))}</div>` : ''}</td></tr>`
   const warn = [
     v.mismatches.length ? `<p class="note" style="color:var(--critical)">The ledger disagrees with what you hold for ${v.mismatches.length} position${v.mismatches.length === 1 ? '' : 's'}: ${esc(v.mismatches.slice(0, 5).map((m) => `${m.symbol} (ledger ${plain(m.ledger_qty, 3)}, held ${plain(m.held_qty, 3)})`).join(', '))}${v.mismatches.length > 5 ? ', …' : ''}. A trade is missing, or a bonus or split is not in the ledger. Gains on those positions may be wrong, and XIRR is left blank for their sleeves.</p>` : '',
     v.unmatched.length ? `<p class="note" style="color:var(--critical)">${v.unmatched.length} sale${v.unmatched.length === 1 ? '' : 's'} had no purchase behind ${v.unmatched.length === 1 ? 'it' : 'them'} (${esc(v.unmatched.slice(0, 4).map((u) => u.symbol).join(', '))}${v.unmatched.length > 4 ? ', …' : ''}): the ledger starts after the position was opened. They are left out rather than counted as pure profit.</p>` : '',
@@ -99,7 +99,7 @@ export function render(el) {
     // Realised profit value without triangle, colored red or green
     const realisedValueStr = s.realised >= 0
       ? `<span style="color:var(--good)">+${moneyExact(s.realised)}</span>`
-      : `<span style="color:var(--critical)">−${moneyExact(Math.abs(s.realised))}</span>`
+      : `<span style="color:var(--critical)">-${moneyExact(Math.abs(s.realised))}</span>`
 
     const tableTitle = (gran === 'all' || !selectedPeriod)
       ? `All trades (${sortedTrades.length})`
@@ -133,8 +133,8 @@ export function render(el) {
           ${dropdownOpen ? `
             <div id="sleeve-dropdown-menu" style="position:absolute;top:calc(100% + 4px);right:0;z-index:200;background:var(--card);border:1px solid var(--ring-strong);border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,0.3);min-width:230px;padding:8px">
               <div style="display:flex;justify-content:space-between;align-items:center;padding:2px 4px 8px;border-bottom:1px solid var(--gridline);margin-bottom:6px">
-                <button type="button" class="btn ${allSleevesSelected ? 'primary' : ''}" data-action="select-all" style="padding:2px 8px;font-size:11.5px;${allSleevesSelected ? 'background:#ffffff;color:#000000;border-color:#ffffff;font-weight:600;' : ''}">Select all</button>
-                <button type="button" class="btn ${noSleevesSelected ? 'primary' : ''}" data-action="clear-all" style="padding:2px 8px;font-size:11.5px;${noSleevesSelected ? 'background:#ffffff;color:#000000;border-color:#ffffff;font-weight:600;' : ''}">Clear all</button>
+                <button type="button" class="btn ${allSleevesSelected ? 'primary' : ''}" data-action="select-all" style="padding:2px 8px;font-size:11.5px;">Select all</button>
+                <button type="button" class="btn ${noSleevesSelected ? 'primary' : ''}" data-action="clear-all" style="padding:2px 8px;font-size:11.5px;">Clear all</button>
               </div>
               <div style="max-height:220px;overflow-y:auto;display:flex;flex-direction:column;gap:2px">
                 ${SLEEVE_FILTERS.map((f) => {
@@ -163,9 +163,10 @@ export function render(el) {
           <div class="hero-figure" style="font-size:28px">${s.trades}</div>
           <div class="hero-secondary" style="margin-top:2px;font-size:13px">${s.winners} won · ${s.losers} lost</div>
         </div>
-        <div style="min-width:110px">
+        <div style="min-width:130px">
           <div class="hero-label">Win rate</div>
-          <div class="hero-figure" style="font-size:28px">${s.win_rate_pct === null ? '-' : `${s.win_rate_pct}%`}</div>
+          <div class="hero-figure" style="font-size:28px">${s.win_rate_pct === null ? '-' : `${s.win_rate_pct}% <span style="font-size:16px;font-weight:600;color:var(--muted)">${s.winners}/${s.trades}</span>`}</div>
+          <div style="margin-top:6px"><span class="minibar" style="display:flex;gap:2px;background:none;height:6px" title="${s.winners} won, ${s.losers} lost"><span style="flex:${s.winners};background:var(--good);border-radius:2px"></span><span style="flex:${s.losers};background:var(--critical);border-radius:2px"></span></span></div>
         </div>
         <div style="min-width:120px">
           <div class="hero-label">Gross wins</div>
@@ -174,7 +175,7 @@ export function render(el) {
         </div>
         <div style="min-width:120px">
           <div class="hero-label">Gross losses</div>
-          <div class="hero-figure" style="font-size:28px;color:var(--critical)">${s.gross_losses === 0 ? '₹0' : `−${compact(Math.abs(s.gross_losses)).replace('−', '')}`}</div>
+          <div class="hero-figure" style="font-size:28px;color:var(--critical)">${s.gross_losses === 0 ? '₹0' : `-${compact(Math.abs(s.gross_losses)).replace('-', '')}`}</div>
           <div class="hero-secondary" style="margin-top:2px;font-size:13px">${s.losers} lost</div>
         </div>
         <div style="min-width:120px">
@@ -354,7 +355,7 @@ function stackedBarsSigned(periods, granularity = 'month', selectedPeriod = null
   const yLabels = `<line x1="${pad.l}" x2="${W - pad.r}" y1="${midY.toFixed(1)}" y2="${midY.toFixed(1)}" stroke="var(--baseline)"/>` +
     `<text x="${pad.l - 8}" y="${(midY + 4).toFixed(1)}" text-anchor="end" fill="var(--muted)" font-size="11.5">₹0</text>` +
     `<text x="${pad.l - 8}" y="${pad.t + 10}" text-anchor="end" fill="var(--muted)" font-size="11.5">${compact(maxPos)}</text>` +
-    (hasNeg && maxNeg > 0 ? `<text x="${pad.l - 8}" y="${H - pad.b}" text-anchor="end" fill="var(--muted)" font-size="11.5">−${compact(maxNeg).replace('−', '')}</text>` : '')
+    (hasNeg && maxNeg > 0 ? `<text x="${pad.l - 8}" y="${H - pad.b}" text-anchor="end" fill="var(--muted)" font-size="11.5">-${compact(maxNeg).replace('-', '')}</text>` : '')
 
   return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;display:block">${yLabels}${bars}</svg>`
 }

@@ -5,7 +5,7 @@ import { hasData, ppfRateDue } from './repo.js'
 import { syncInbox as importInbox, inboxFailures, setPpfRate, IngestError } from './ingest.js'
 import { quarterLabel } from './compute/ppf.js'
 import { isDemo, loadDemo } from './demo.js'
-import { esc } from './ui/format.js'
+import { esc, getCurrency, setCurrency } from './ui/format.js'
 
 // Each page's code is fetched only when you visit it. A browser asks for every
 // statically imported module at once, and a plain single-process dev server can
@@ -51,11 +51,29 @@ async function show() {
     <header class="topbar"><h1>Fingod</h1>
       <nav class="tabs">${PAGES.map((p) => `<a class="tab" href="#/${p.id}" ${p.id === entry.id ? 'aria-current="page"' : ''}>${p.title}</a>`).join('')}</nav>
       <span class="spacer"></span><span class="sub" id="syncstate"></span>
+      <div class="pill-toggle" id="currtoggle" role="radiogroup" aria-label="Currency" style="margin: 0 8px">
+        <button type="button" class="pill-opt${getCurrency() === 'INR' ? ' active' : ''}" data-curr="INR">INR</button>
+        <button type="button" class="pill-opt${getCurrency() === 'USD' ? ' active' : ''}" data-curr="USD">USD</button>
+      </div>
       <button class="btn" id="theme" title="Switch theme">${theme() === 'dark' ? 'Light mode' : 'Dark mode'}</button></header>
     ${isDemo() ? '<div class="banner">You are looking at <b>demo data</b> - every name and number is invented. <a href="#/data">Clear it</a> and connect your own from <a href="#/welcome">setup</a>.</div>' : ''}
     ${ppfBanner()}
     <main id="page"></main></div>`
   document.getElementById('theme').onclick = () => { localStorage.setItem('fingod-theme', theme() === 'dark' ? 'light' : 'dark'); applyTheme(); show() }
+  const currtoggle = document.getElementById('currtoggle')
+  if (currtoggle) {
+    currtoggle.addEventListener('click', (e) => {
+      const btn = e.target.closest('button[data-curr]')
+      if (btn) {
+        const curr = btn.dataset.curr
+        if (curr !== getCurrency()) {
+          setCurrency(curr)
+          currtoggle.querySelectorAll('button[data-curr]').forEach((b) => b.classList.toggle('active', b.dataset.curr === curr))
+          show()
+        }
+      }
+    })
+  }
   bindPpfBanner()
   try { page.render(document.getElementById('page')) } catch (e) { fatal(e) }
   window.scrollTo(0, y)
@@ -87,8 +105,21 @@ function bindPpfBanner() {
 async function showWelcome(seq) {
   const welcome = await import('./ui/welcome.js')
   if (seq !== showSeq) return
-  root.innerHTML = '<div class="app wide"><header class="topbar"><h1>Fingod</h1><span class="spacer"></span><button class="btn" id="theme">' + (theme() === 'dark' ? 'Light mode' : 'Dark mode') + '</button></header><div id="welcome"></div></div>'
+  root.innerHTML = '<div class="app wide"><header class="topbar"><h1>Fingod</h1><span class="spacer"></span><div class="pill-toggle" id="currtoggle" role="radiogroup" aria-label="Currency" style="margin: 0 8px"><button type="button" class="pill-opt' + (getCurrency() === 'INR' ? ' active' : '') + '" data-curr="INR">INR</button><button type="button" class="pill-opt' + (getCurrency() === 'USD' ? ' active' : '') + '" data-curr="USD">USD</button></div><button class="btn" id="theme">' + (theme() === 'dark' ? 'Light mode' : 'Dark mode') + '</button></header><div id="welcome"></div></div>'
   document.getElementById('theme').onclick = () => { localStorage.setItem('fingod-theme', theme() === 'dark' ? 'light' : 'dark'); applyTheme(); show() }
+  const currtoggle = document.getElementById('currtoggle')
+  if (currtoggle) {
+    currtoggle.addEventListener('click', (e) => {
+      const btn = e.target.closest('button[data-curr]')
+      if (btn) {
+        const curr = btn.dataset.curr
+        if (curr !== getCurrency()) {
+          setCurrency(curr)
+          show()
+        }
+      }
+    })
+  }
   cleanup = welcome.render(document.getElementById('welcome'), { onData: () => { location.hash = '#/dashboard' } })
 }
 

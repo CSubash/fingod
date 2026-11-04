@@ -26,7 +26,7 @@ export function kindOf(note) {
 
 /** Who paid: the note with the dividend wording stripped, so "ITC" and "ITC dividend" are one payer. */
 export function payerOf(note) {
-  const n = String(note || '').replace(/\b(final|interim|special)?\s*(dividend|div)\b/gi, '').replace(/[,\-–:]+/g, ' ').replace(/\s+/g, ' ').trim()
+  const n = String(note || '').replace(/\b(final|interim|special)?\s*(dividend|div)\b/gi, '').replace(/\bstocks?\b/gi, '').replace(/[,\-–:]+/g, ' ').replace(/\s+/g, ' ').trim()
   return n ? n.toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase()) : null
 }
 

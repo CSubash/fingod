@@ -52,19 +52,27 @@ export function lineChart({ series, height = 280, yFormat = String, xFormat, zer
   const ends = labelEnds ? live.map((s) => { const last = s.points[s.points.length - 1]; return { s, x: sx(last[0]) + 8, y: sy(last[1]) + 4 } }).sort((a, b) => a.y - b.y) : []
   for (let i = 0; i < ends.length; i++) { const min = i ? ends[i - 1].y + LABEL_GAP : pad.t + 6; if (ends[i].y < min) ends[i].y = min }
   for (let i = ends.length - 1; i >= 0; i--) { const max = i < ends.length - 1 ? ends[i + 1].y - LABEL_GAP : height - pad.b; if (ends[i].y > max) ends[i].y = max }
-  const endText = ends.map((e) => `<text class="lc-end" ${e.s.id ? `data-series-toggle="${e.s.id}"` : ''} data-key="${esc(e.s.key ?? e.s.label)}" x="${e.x}" y="${e.y.toFixed(1)}" fill="${e.s.color}" font-size="${fontSize}" style="cursor:pointer">${esc(e.s.endLabel ?? yFormat(e.s.points[e.s.points.length - 1][1]))}</text>`).join('')
+  const endText = ends.map((e) => `<text class="lc-end" data-key="${esc(e.s.id ?? e.s.key ?? e.s.label)}" x="${e.x}" y="${e.y.toFixed(1)}" fill="${e.s.color}" font-size="${fontSize}" style="cursor:pointer">${esc(e.s.endLabel ?? yFormat(e.s.points[e.s.points.length - 1][1]))}</text>`).join('')
 
   // Each series is a group keyed for the legend, with a wide invisible line on top so a thin line is easy to hover.
   const lines = live.map((s) => {
     const pts = s.points.map((p) => `${sx(p[0]).toFixed(1)},${sy(p[1]).toFixed(1)}`)
+    const key = esc(s.id ?? s.key ?? s.label)
     const path = s.points.length > 1
-      ? `<polyline class="lc-path" ${s.id ? `data-series-toggle="${s.id}"` : ''} points="${pts.join(' ')}" fill="none" stroke="${s.color}" stroke-width="${s.width || 2.4}" stroke-linejoin="round" stroke-linecap="round"${s.dash ? ` stroke-dasharray="${s.dash}"` : ''} style="cursor:pointer"><title>${esc(s.label)} (click line to toggle)</title></polyline>` +
-        `<polyline ${s.id ? `data-series-toggle="${s.id}"` : ''} points="${pts.join(' ')}" fill="none" stroke="transparent" stroke-width="14" stroke-linejoin="round" pointer-events="stroke" style="cursor:pointer"/>`
+      ? `<polyline class="lc-path" data-key="${key}" points="${pts.join(' ')}" fill="none" stroke="${s.color}" stroke-width="${s.width || 2.4}" stroke-linejoin="round" stroke-linecap="round"${s.dash ? ` stroke-dasharray="${s.dash}"` : ''} style="cursor:pointer"><title>${esc(s.label)} (click line to toggle)</title></polyline>` +
+        `<polyline data-key="${key}" points="${pts.join(' ')}" fill="none" stroke="transparent" stroke-width="14" stroke-linejoin="round" pointer-events="stroke" style="cursor:pointer"/>`
       : ''
-    const dots = s.points.map((p) => `<circle ${s.id ? `data-series-toggle="${s.id}"` : ''} cx="${sx(p[0]).toFixed(1)}" cy="${sy(p[1]).toFixed(1)}" r="${s.points.length === 1 ? 4 : 7}" fill="${s.points.length === 1 ? s.color : 'transparent'}" style="cursor:pointer"><title>${esc(s.label)} · ${esc(xFormat ? xFormat(p[0]) : '')} · ${esc(yFormat(p[1]))}</title></circle>`).join('')
-    return `<g class="lc-line" data-key="${esc(s.key ?? s.label)}" style="color:${s.color}">${path}${dots}</g>`
+    const dots = s.points.map((p) => `<circle data-key="${key}" cx="${sx(p[0]).toFixed(1)}" cy="${sy(p[1]).toFixed(1)}" r="${s.points.length === 1 ? 4 : 7}" fill="${s.points.length === 1 ? s.color : 'transparent'}" style="cursor:pointer"><title>${esc(s.label)} · ${esc(xFormat ? xFormat(p[0]) : '')} · ${esc(yFormat(p[1]))}</title></circle>`).join('')
+    return `<g class="lc-line" data-key="${key}" style="color:${s.color}">${path}${dots}</g>`
   }).join('')
-  return `<svg viewBox="0 0 ${W} ${height}" role="img" aria-label="${esc(title)}" style="width:100%;height:auto;display:block">${grid}${base}${xl}${lines}${endText}</svg>`
+    const dragOverlay = `<g class="drag-overlay" style="display:none;pointer-events:none">
+    <rect class="drag-shade" x="0" y="${pad.t}" width="0" height="${height - pad.t - pad.b}" fill="rgba(255, 255, 255, 0.08)"/>
+    <line class="drag-line-start" x1="0" x2="0" y1="${pad.t}" y2="${height - pad.b}" stroke="var(--ink)" stroke-dasharray="3 3" stroke-width="1.3"/>
+    <line class="drag-line-end" x1="0" x2="0" y1="${pad.t}" y2="${height - pad.b}" stroke="var(--ink)" stroke-dasharray="3 3" stroke-width="1.3"/>
+    <circle class="drag-dot-start" cx="0" cy="0" r="4.5" fill="var(--ink)" stroke="var(--bg)" stroke-width="1.5"/>
+    <circle class="drag-dot-end" cx="0" cy="0" r="4.5" fill="var(--ink)" stroke="var(--bg)" stroke-width="1.5"/>
+  </g>`
+  return `<svg viewBox="0 0 ${W} ${height}" data-y-lo="${lo}" data-y-hi="${hi}" data-x-min="${xmin}" data-x-max="${xmax}" data-pad-l="${pad.l}" data-pad-r="${pad.r}" data-pad-t="${pad.t}" data-pad-b="${pad.b}" data-height="${height}" role="img" aria-label="${esc(title)}" style="width:100%;height:auto;display:block;user-select:none;-webkit-user-select:none">${grid}${base}${xl}${lines}${endText}${dragOverlay}</svg>`
 }
 
 /** periods: [{period, label, segments: {key: n}}]; keys in stacking order. */
@@ -104,7 +112,7 @@ export function donut({ rows, size = 240, thickness = 30 }) {
     offset -= dash
     return `<circle cx="${mid}" cy="${mid}" r="${r}" fill="none" stroke="${d.color}" stroke-width="${thickness}" stroke-dasharray="${dash.toFixed(2)} ${gap.toFixed(2)}" stroke-dashoffset="${off.toFixed(2)}" transform="rotate(-90 ${mid} ${mid})"><title>${esc(d.key)} · ${money(d.value)} · ${(frac * 100).toFixed(1)}%</title></circle>`
   }).join('')
-  return `<svg viewBox="0 0 ${size} ${size}" style="width:${size}px;height:${size}px;display:block">${rings}</svg>`
+  return `<svg viewBox="0 0 ${size} ${size}" style="width:100%;max-width:${size}px;height:auto;display:block;margin:0 auto" role="img" aria-label="Allocation">${rings}</svg>`
 }
 
 export function sparkline(values, color = 'var(--sleeve-in_equity)', height = 44) {
@@ -128,7 +136,7 @@ export function interactiveLegend(series, hidden = new Set()) {
   const items = series.map((s) => {
     const off = hidden.has(s.key)
     return `<button type="button" class="legend-toggle lg${off ? ' off' : ''}" data-key="${esc(s.key)}" data-toggle="${esc(s.key)}" aria-pressed="${!off}" style="--lg-color:${s.color}" title="${off ? 'Show' : 'Hide'} ${esc(s.label)}">` +
-      `<i class="swatch" style="background:${s.color}"></i>${esc(s.label)}${s.dash ? '<span class="lg-tag">dashed</span>' : ''}</button>`
+      `<i class="swatch" style="background:${s.color}"></i>${esc(s.label)}</button>`
   }).join('')
   return `<div class="legend">${items}${hidden.size ? '<button type="button" class="legend-toggle lg-reset" data-show-all>Show all</button>' : ''}</div>`
 }
@@ -137,13 +145,213 @@ export function interactiveLegend(series, hidden = new Set()) {
  * works on anything inside a [data-chart] whose parts carry the same data-key. */
 export function bindHighlight(root) {
   const set = (scope, key) => scope.querySelectorAll('[data-key]').forEach((n) => {
+    if (n.dataset.disabled === 'true' || n.classList.contains('disabled')) {
+      n.classList.remove('glow', 'dim')
+      return
+    }
     const on = key !== null && n.dataset.key === key
     n.classList.toggle('glow', on)
     n.classList.toggle('dim', key !== null && !on)
   })
   const scopeOf = (n) => n.closest && n.closest('[data-chart]')
-  root.addEventListener('mouseover', (e) => { const sc = scopeOf(e.target); if (!sc) return; const t = e.target.closest('[data-key]'); set(sc, t ? t.dataset.key : null) })
-  root.addEventListener('mouseout', (e) => { const sc = scopeOf(e.target); if (sc && !sc.contains(e.relatedTarget)) set(sc, null) })
-  root.addEventListener('focusin', (e) => { const sc = scopeOf(e.target), t = e.target.closest && e.target.closest('[data-key]'); if (sc && t) set(sc, t.dataset.key) })
-  root.addEventListener('focusout', (e) => { const sc = scopeOf(e.target); if (sc) set(sc, null) })
+  root.addEventListener('mouseover', (e) => {
+    const sc = scopeOf(e.target)
+    if (!sc) return
+    const t = e.target.closest('[data-key]')
+    if (!t || t.dataset.disabled === 'true' || t.classList.contains('disabled')) {
+      set(sc, null)
+      return
+    }
+    set(sc, t.dataset.key)
+  })
+  root.addEventListener('mouseout', (e) => {
+    const sc = scopeOf(e.target)
+    if (sc && !sc.contains(e.relatedTarget)) set(sc, null)
+  })
+  root.addEventListener('focusin', (e) => {
+    const sc = scopeOf(e.target)
+    const t = e.target.closest && e.target.closest('[data-key]')
+    if (sc && t && t.dataset.disabled !== 'true' && !t.classList.contains('disabled')) set(sc, t.dataset.key)
+  })
+  root.addEventListener('focusout', (e) => {
+    const sc = scopeOf(e.target)
+    if (sc) set(sc, null)
+  })
+}
+
+
+/** Drag across the chart to measure period and return, exactly like Google Finance. */
+export function bindChartDrag(root, seriesData, yFormat = String, xFormat) {
+  const svg = root.querySelector('svg[data-y-lo]') || root.querySelector('svg')
+  const tooltip = root.querySelector('.drag-tooltip')
+  if (!svg || !tooltip || !seriesData || !seriesData.length) return
+
+  const dragOverlay = svg.querySelector('.drag-overlay')
+  const dragShade = svg.querySelector('.drag-shade')
+  const lineStart = svg.querySelector('.drag-line-start')
+  const lineEnd = svg.querySelector('.drag-line-end')
+  const dotStart = svg.querySelector('.drag-dot-start')
+  const dotEnd = svg.querySelector('.drag-dot-end')
+
+  if (!dragOverlay || !dragShade || !lineStart || !lineEnd || !dotStart || !dotEnd) return
+
+  let isDragging = false
+  let startX = 0
+  let activeSeriesKey = null
+
+  const getSvgX = (e) => {
+    const rect = svg.getBoundingClientRect()
+    return ((e.clientX - rect.left) / rect.width) * 900
+  }
+
+  const getMeasureSeries = () => {
+    if (activeSeriesKey) {
+      const match = seriesData.find((s) => (s.id ?? s.key ?? s.label) === activeSeriesKey)
+      if (match && match.points && match.points.length >= 2) return match
+    }
+    const portfolio = seriesData.find((s) => (s.id ?? s.key) === 'portfolio' || s.label === 'Overall Portfolio')
+    if (portfolio && portfolio.points && portfolio.points.length >= 2) return portfolio
+    return seriesData.find((s) => s.points && s.points.length >= 2)
+  }
+
+  svg.addEventListener('mouseover', (e) => {
+    const el = e.target.closest('[data-key]')
+    if (el) activeSeriesKey = el.dataset.key
+  })
+
+  const padL = Number(svg.dataset.padL || 40)
+  const padR = Number(svg.dataset.padR || 80)
+  const padT = Number(svg.dataset.padT || 12)
+  const padB = Number(svg.dataset.padB || 28)
+  const H = Number(svg.dataset.height || 280)
+  const plotW = 900 - padL - padR
+  const plotH = H - padT - padB
+  const lo = Number(svg.dataset.yLo)
+  const hi = Number(svg.dataset.yHi)
+  const xmin = Number(svg.dataset.xMin)
+  const xmax = Number(svg.dataset.xMax)
+
+  svg.addEventListener('mousedown', (e) => {
+    if (e.button !== 0) return
+    const sx = getSvgX(e)
+    if (sx < padL || sx > 900 - padR) return
+    isDragging = true
+    startX = sx
+    dragOverlay.style.display = 'none'
+    tooltip.style.display = 'none'
+  })
+
+  const onMouseMove = (e) => {
+    if (!isDragging) return
+    const curX = getSvgX(e)
+    const clampedCurX = Math.max(padL, Math.min(900 - padR, curX))
+    if (Math.abs(clampedCurX - startX) < 4) return
+
+    const x1 = Math.min(startX, clampedCurX)
+    const x2 = Math.max(startX, clampedCurX)
+
+    const s = getMeasureSeries()
+    if (!s || !s.points || s.points.length < 2) return
+
+    const ms1 = xmin + ((x1 - padL) / plotW) * (xmax - xmin)
+    const ms2 = xmin + ((x2 - padL) / plotW) * (xmax - xmin)
+
+    const findNearest = (targetMs) => {
+      let best = s.points[0], bestDiff = Math.abs(s.points[0][0] - targetMs)
+      for (let i = 1; i < s.points.length; i++) {
+        const diff = Math.abs(s.points[i][0] - targetMs)
+        if (diff < bestDiff) {
+          best = s.points[i]
+          bestDiff = diff
+        }
+      }
+      return best
+    }
+
+    const pt1 = findNearest(ms1)
+    const pt2 = findNearest(ms2)
+    if (pt1[0] === pt2[0]) return
+
+    const sx = (x) => padL + (xmax === xmin ? plotW / 2 : ((x - xmin) / (xmax - xmin)) * plotW)
+    const sy = (y) => padT + (1 - (y - lo) / (hi - lo || 1)) * plotH
+
+    const px1 = sx(pt1[0])
+    const py1 = sy(pt1[1])
+    const px2 = sx(pt2[0])
+    const py2 = sy(pt2[1])
+
+    const minPx = Math.min(px1, px2)
+    const maxPx = Math.max(px1, px2)
+
+    dragShade.setAttribute('x', minPx)
+    dragShade.setAttribute('y', padT)
+    dragShade.setAttribute('width', maxPx - minPx)
+    dragShade.setAttribute('height', plotH)
+    dragShade.setAttribute('fill', s.color ? `color-mix(in srgb, ${s.color} 18%, transparent)` : 'rgba(255, 255, 255, 0.08)')
+
+    lineStart.setAttribute('x1', px1)
+    lineStart.setAttribute('x2', px1)
+    lineStart.setAttribute('y1', padT)
+    lineStart.setAttribute('y2', H - padB)
+
+    lineEnd.setAttribute('x1', px2)
+    lineEnd.setAttribute('x2', px2)
+    lineEnd.setAttribute('y1', padT)
+    lineEnd.setAttribute('y2', H - padB)
+
+    dotStart.setAttribute('cx', px1)
+    dotStart.setAttribute('cy', py1)
+    dotStart.setAttribute('fill', s.color || 'var(--ink)')
+    dotStart.setAttribute('stroke', '#ffffff')
+    dotStart.setAttribute('stroke-width', '2')
+    dotStart.setAttribute('r', '5')
+
+    dotEnd.setAttribute('cx', px2)
+    dotEnd.setAttribute('cy', py2)
+    dotEnd.setAttribute('fill', s.color || 'var(--ink)')
+    dotEnd.setAttribute('stroke', '#ffffff')
+    dotEnd.setAttribute('stroke-width', '2')
+    dotEnd.setAttribute('r', '5')
+
+    dragOverlay.style.display = ''
+
+    const deltaVal = pt2[1] - pt1[1]
+    const deltaPct = pt1[1] > 0 ? ((pt2[1] - pt1[1]) / pt1[1]) * 100 : 0
+    const isPos = deltaVal >= 0
+
+    const formatDragDate = (ms) => {
+      const d = new Date(ms)
+      const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+      return `${d.getDate()} ${months[d.getMonth()]} ${d.getFullYear()}`
+    }
+
+    const d1Str = formatDragDate(pt1[0])
+    const d2Str = formatDragDate(pt2[0])
+
+    const sign = isPos ? '+' : '-'
+    const arrow = isPos ? '↑' : '↓'
+    const diffVal = `${sign}${Math.abs(deltaVal).toFixed(2)}`
+    const diffPct = `(${Math.abs(deltaPct).toFixed(2)}%)`
+
+    tooltip.innerHTML = `<span style="color:${isPos ? 'var(--good)' : 'var(--critical)'};font-weight:600">${diffVal} ${diffPct} ${arrow}</span><span style="color:var(--ink-2);margin-left:8px">${d1Str}-${d2Str}</span>${s.label && s.label !== 'Overall Portfolio' ? `<span style="font-size:11px;color:${s.color || 'var(--ink)'};margin-left:6px">(${esc(s.label)})</span>` : ''}`
+    tooltip.style.display = 'inline-flex'
+
+    const rect = svg.getBoundingClientRect()
+    const pctMid = ((px1 + px2) / 2) / 900
+    const pixelLeft = pctMid * rect.width
+    tooltip.style.left = `${Math.max(140, Math.min(rect.width - 140, pixelLeft))}px`
+  }
+
+  const onMouseUp = (e) => {
+    if (!isDragging) return
+    isDragging = false
+    const curX = getSvgX(e)
+    if (Math.abs(curX - startX) < 6) {
+      dragOverlay.style.display = 'none'
+      tooltip.style.display = 'none'
+    }
+  }
+
+  window.addEventListener('mousemove', onMouseMove)
+  window.addEventListener('mouseup', onMouseUp)
 }

@@ -37,7 +37,7 @@ test('sleeveFlows: a SIP is flow and a price move is not', () => {
 const row = (o) => ({ id: Math.random().toString(36), sleeve: 'in_equity', symbol: 'ACME', isin: 'INE000A01001', fx_rate: 1, fees_inr: 0, ...o })
 
 test('fifo: a sale consumes the oldest lots first, and each piece keeps its own cost and date', () => {
-  const { disposals, open } = fifo([
+  const { disposals, open, lots } = fifo([
     row({ trade_date: '2025-01-01', side: 'buy', qty: 10, price: 100 }),
     row({ trade_date: '2025-02-01', side: 'buy', qty: 10, price: 120 }),
     row({ trade_date: '2025-06-01', side: 'sell', qty: 15, price: 150 }),
@@ -48,6 +48,10 @@ test('fifo: a sale consumes the oldest lots first, and each piece keeps its own 
   assert.equal(disposals[0].buy_date, '2025-01-01')
   const o = [...open.values()][0]
   assert.deepEqual([o.qty, o.cost], [5, 600])
+  const unsoldBook = [...lots.values()][0]
+  assert.equal(unsoldBook.length, 1)
+  assert.equal(unsoldBook[0].date, '2025-02-01')
+  assert.equal(unsoldBook[0].qty, 5)
 })
 
 test('fifo: fees raise the cost and lower the proceeds', () => {

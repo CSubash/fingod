@@ -84,6 +84,28 @@ export function labelNets(txns, labelsById, granularity = 'month', from, to, fal
   })
 }
 
+/** The same netting, keyed by Wallet category group instead of label: a refund lowers the
+ * category it came back under, and one that nets negative is clamped like a label's. For
+ * people who do not label their records. Returns [{period, label, net}] (label = category). */
+export function categoryNets(txns, labelsById, granularity = 'month', from, to) {
+  const cells = new Map()
+  for (const t of txns) {
+    const labels = labelsById.get(t.id) || []
+    if (!inRange(t, from, to) || !isCountable(t, labels)) continue
+    const k = `${periodOf(t.txn_date, granularity)}\0${t.category_top || 'Uncategorised'}`
+    cells.set(k, (cells.get(k) || 0) - Number(t.amount_inr))
+  }
+  return [...cells.entries()].map(([k, net]) => {
+    const [period, label] = k.split('\0')
+    return { period, label, net }
+  })
+}
+
+/** Spend by category group, in the shape expenseByLabel returns, so one chart draws either. */
+export function expenseByCategory(txns, labelsById, granularity = 'month', from, to, top = PALETTE) {
+  return rollup(categoryNets(txns, labelsById, granularity, from, to), top)
+}
+
 export function expenseByLabel(txns, labelsById, granularity = 'month', from, to, top = PALETTE, fallbackToCategory = false) {
   const cells = labelNets(txns, labelsById, granularity, from, to, fallbackToCategory)
   const totals = new Map()

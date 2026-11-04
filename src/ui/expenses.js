@@ -1,10 +1,11 @@
 import { transactionsAll, labelsMap, transactionCount } from '../repo.js'
-import { expenseByLabel, breakdown, listTransactions, UNTAGGED } from '../compute/expenses.js'
+import { expenseByLabel, expenseByCategory, breakdown, listTransactions, UNTAGGED } from '../compute/expenses.js'
 import { stackedBars } from './charts.js'
 import { paginate, scrollBox, bindPager } from './pager.js'
 import { compact, moneyExact, money, plain, shortDate, monthLabel, labelColor, categoryColor, CATEGORY_COLORS, esc } from './format.js'
 
 let gran = 'month'
+let by = null // 'label' | 'category'
 const drill = { period: null, category: null, subcategory: null, label: null }
 
 const periodLabel = (p) => (gran === 'all' ? 'All time' : gran === 'week' ? `Week of ${shortDate(p)}` : gran === 'year' ? p.slice(0, 4) : monthLabel(p))
@@ -108,6 +109,7 @@ export function render(el) {
   bindPager(el, draw)
   el.addEventListener('click', (e) => {
     const g = e.target.closest('[data-gran]'); if (g) { gran = g.dataset.gran; Object.assign(drill, { period: null, category: null, subcategory: null }); return draw() }
+    const b = e.target.closest('[data-by]'); if (b) { by = b.dataset.by; Object.assign(drill, { period: null, category: null, subcategory: null, label: null }); return draw() }
     const bar = e.target.closest('rect[data-period]');
     if (bar) {
       const k = bar.dataset.label

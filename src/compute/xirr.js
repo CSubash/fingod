@@ -21,9 +21,31 @@ export function xirr(flows, { minDays = 0 } = {}) {
   const t0 = fs[0].date
   const yrs = fs.map((f) => daysBetween(t0, f.date) / 365)
   const npv = (r) => sum(fs.map((f, i) => f.amount / (1 + r) ** yrs[i]))
+
+  const n0 = npv(0)
+  if (Math.abs(n0) < 1e-7) return 0
+
   let lo = -0.9999, hi = 10
-  while (npv(lo) * npv(hi) > 0 && hi < 1e5) hi *= 10
-  if (npv(lo) * npv(hi) > 0) return null
+  if (n0 > 0) {
+    lo = 0
+    let curHi = hi
+    while (npv(curHi) > 0 && curHi < 1e6) curHi *= 10
+    if (npv(curHi) > 0) return null
+    hi = curHi
+  } else {
+    hi = 0
+    let curLo = -0.5
+    while (npv(curLo) < 0 && curLo > -0.9999) {
+      curLo = 1 - (1 - curLo) * 2
+      if (curLo < -0.9999) curLo = -0.9999
+    }
+    if (npv(curLo) < 0) {
+      if (npv(lo) <= 0) return null
+      curLo = lo
+    }
+    lo = curLo
+  }
+
   for (let i = 0; i < 200; i++) {
     const mid = (lo + hi) / 2
     if (npv(lo) * npv(mid) <= 0) hi = mid; else lo = mid

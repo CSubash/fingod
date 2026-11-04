@@ -1,194 +1,151 @@
 import { investmentsView, incomeView, RANGE_IDS } from '../repo.js'
+import { getSetting } from '../db.js'
 import { paginate, scrollBox, bindPager } from './pager.js'
-import { lineChart, stackedBars, bindHighlight } from './charts.js' 
-import { compact, moneyExact, plain, pct, shortDate, monthLabel, sleeveLabel, sleeveColor, delta, esc, money } from './format.js'
-import { HISTORICAL_INDEX } from '../data_benchmarks.js'
-import { daysBetween } from '../compute/num.js'
+import { lineChart, stackedBars, bindHighlight, bindChartDrag } from './charts.js'
+import { compact, moneyExact, plain, pct, shortDate, monthLabel, sleeveLabel, sleeveColor, delta, esc, money, formatPrice } from './format.js'
 
 const RANGE_LABEL = { '1w': '1 week', '1m': '1 month', '3m': '3 months', '1y': '1 year', all: 'All' }
 let range = '3m', open = null
-const hidden = new Set() // series keys switched off in the performance chart; kept across range changes
-
-// The portfolio and the two indices ride in the same chart as the sleeves: solid white for the whole portfolio,
-// dashed for each index, so the comparison is made on one axis.
-const MARKET_STYLE = { portfolio: { color: 'var(--ink)', dash: '' }, nifty50: { color: 'var(--ink-2)', dash: '7 5' }, sp500: { color: 'var(--muted)', dash: '2 5' } }
-
-let holdingsSort = { col: 'value', dir: 'desc' }
-
-export const COMPARISON_OPTIONS = [
-  { id: 'overall', label: 'Overall Portfolio', default: true },
-  { id: 'in_equity', label: 'IN Stocks', default: true },
-  { id: 'in_mf', label: 'IN Mutual Funds', default: true },
-  { id: 'us_equity', label: 'US Stocks', default: false },
-  { id: 'btc', label: 'Bitcoin (Binance)', default: true },
-  { id: 'ppf', label: 'PPF', default: false },
-  { id: 'fd', label: 'Fixed Deposits', default: false },
-  { id: 'epf', label: 'EPF', default: false },
-  { id: 'nifty50', label: 'Nifty 50 Index', default: true },
-  { id: 'nifty_midcap150', label: 'Nifty Midcap 150 Index', default: false },
-  { id: 'nifty_smallcap250', label: 'Nifty Smallcap 250 Index', default: false },
-  { id: 'sp500', label: 'S&P 500 Index', default: false },
-  { id: 'nasdaq100', label: 'Nasdaq 100 Index', default: false },
-  { id: 'nyse_composite', label: 'NYSE Composite Index', default: false },
+const PERF_RANGES = [
+  { id: '1m', label: '1 month', days: 30 },
+  { id: '6m', label: '6 months', days: 180 },
+  { id: '1y', label: '1 year', days: 365 },
+  { id: '5y', label: '5 years', days: 1825 },
+  { id: '10y', label: '10 years', days: 3650 },
+  { id: 'all', label: 'All', days: null },
 ]
+let perfRange = 'all'
+let currentShownSeries = []
+const ALL_BENCHMARK_KEYS = ['nifty50', 'nifty_midcap150', 'nifty_smallcap250', 'sp500', 'nasdaq100', 'nyse_composite']
+const hidden = new Set(ALL_BENCHMARK_KEYS)
 
-export const STOCK_BUY_DATES = {
-  '5PAISA': '2023-12-26',
-  'AARTIDRUGS': '2024-08-22',
-  'AARTIIND': '2024-08-07',
-  'ATULAUTO': '2024-09-02',
-  'BAJAJHFL': '2025-07-07',
-  'BANDHANBNK': '2024-10-31',
-  'BAYERCROP': '2023-12-26',
-  'BIRLAMONEY': '2025-10-16',
-  'BRITANNIA': '2026-06-30',
-  'CAMS': '2025-11-07',
-  'DABUR': '2025-02-06',
-  'DMART': '2026-08-04',
-  'EASEMYTRIP': '2024-10-09',
-  'ESCORTS': '2026-07-22',
-  'GODREJCP': '2026-06-30',
-  'GOLDBEES': '2026-02-05',
-  'HAVELLS': '2025-11-24',
-  'HDFCBANK': '2022-03-14',
-  'HDFCLIFE': '2026-07-24',
-  'HINDUNILVR': '2025-11-17',
-  'ICICILIFE': '2023-09-18',
-  'JIOFIN': '2023-09-29',
-  'JPL': '2026-10-27',
-  'JUNIORBEES': '2026-03-23',
-  'KANSAINER': '2025-02-06',
-  'KWIL': '2025-11-17',
-  'PFC': '2026-09-04',
-  'PNB': '2026-03-23',
-  'RECLTD': '2025-11-24',
-  'SSFL-ST': '2026-06-10',
-  'TCS': '2025-08-04',
-  'TITAGARH': '2024-10-14',
-  'TMPV': '2024-12-27',
-  'UNITDSPR': '2025-08-04',
-  'UTIAMC': '2026-09-04',
-  'VBL': '2025-06-23',
-}
-
-const todayIso = () => new Date().toISOString().slice(0, 10)
-
-function getBuyDate(h) {
-  return h.buy_date || STOCK_BUY_DATES[h.symbol] || null
-}
-
-function formatDdmmyy(isoDate) {
-  if (!isoDate) return '-'
-  const parts = isoDate.slice(0, 10).split('-')
-  if (parts.length < 3) return isoDate
-  const [y, m, d] = parts
-  return `${d}/${m}/${y.slice(2)}`
-}
-
-function getHoldingDays(h) {
-  const buyDate = getBuyDate(h)
-  if (!buyDate) return null
-  return daysBetween(buyDate, todayIso())
-}
-
-let enabledSeries = new Set(COMPARISON_OPTIONS.filter((o) => o.default && (HISTORICAL_INDEX[o.id]?.length || 0) > 1).map((o) => o.id))
+let holdingsSortCol = 'buy_date'
+let holdingsSortDir = 'desc'
 
 function holdingsSortIcon(col) {
-  if (holdingsSort.col !== col) return `<span style="opacity:0.3;font-size:11px;margin-left:4px">↕</span>`
-  return `<span style="color:var(--ink);font-size:11px;margin-left:4px">${holdingsSort.dir === 'asc' ? '▲' : '▼'}</span>`
+  if (holdingsSortCol !== col) return `<span style="opacity:0.3;font-size:11px;margin-left:4px">↕</span>`
+  return `<span style="color:var(--ink);font-size:11px;margin-left:4px">${holdingsSortDir === 'asc' ? '▲' : '▼'}</span>`
+}
+
+const MARKET_STYLE = {
+  portfolio: { color: '#ffffff', dash: '', width: 3.4 },
+  overall: { color: '#ffffff', dash: '', width: 3.4 },
+  nifty50: { color: '#ffe119', dash: '7 5', width: 2.2 },
+  nifty_midcap150: { color: '#e6194B', dash: '7 5', width: 2.2 },
+  nifty_smallcap250: { color: '#fabed4', dash: '7 5', width: 2.2 },
+  sp500: { color: '#fffac8', dash: '2 5', width: 2.2 },
+  nasdaq100: { color: '#42d4f4', dash: '2 5', width: 2.2 },
+  nyse_composite: { color: '#bfef45', dash: '2 5', width: 2.2 },
 }
 
 function indexed(v) {
-  const selectedSeries = COMPARISON_OPTIONS
-    .filter((opt) => enabledSeries.has(opt.id) && (HISTORICAL_INDEX[opt.id]?.length || 0) > 1)
-    .map((opt) => ({
-      id: opt.id,
-      label: opt.label,
-      color: sleeveColor(opt.id),
-      points: HISTORICAL_INDEX[opt.id].map((p) => [Date.parse(p.as_of), p.v]),
-    }))
-    .filter((s) => s.points.length > 1)
+  if (v.series.length < 2 && (!v.compare || !v.compare.series || v.compare.series.length < 1)) {
+    return `<div class="empty">Indexed performance needs two checkpoints. Take another and the lines appear.</div>`
+  }
+  const pts = (arr) => arr.map((p) => [Date.parse(p.as_of), p.v])
 
-  const startDate = HISTORICAL_INDEX.nifty50?.[0]?.as_of || '2021-11-01'
-
-  const chart = selectedSeries.length
-    ? lineChart({
-        series: selectedSeries,
-        yFormat: (n) => String(Math.round(n * 10) / 10),
-        xFormat: (ms) => shortDate(new Date(ms).toISOString().slice(0, 10)),
-        baseline: 100,
-        title: 'Performance - every sleeve indexed to 100',
-        labelEnds: true,
-      })
-    : '<div class="empty">No series selected. Click any badge below to display its performance line.</div>'
-
-  const holdingsList = [
-    { id: 'overall', label: 'Overall Portfolio' },
-    { id: 'in_equity', label: 'IN Stocks' },
-    { id: 'in_mf', label: 'IN Mutual Funds' },
-    { id: 'us_equity', label: 'US Stocks' },
-    { id: 'btc', label: 'Bitcoin (Binance)' },
-    { id: 'ppf', label: 'PPF' },
-    { id: 'fd', label: 'Fixed Deposits' },
-    { id: 'epf', label: 'EPF' },
-  ]
-
-  const indicesList = [
-    { id: 'nifty50', label: 'Nifty 50 Index' },
-    { id: 'nifty_midcap150', label: 'Nifty Midcap 150 Index' },
-    { id: 'nifty_smallcap250', label: 'Nifty Smallcap 250 Index' },
-    { id: 'sp500', label: 'S&P 500 Index' },
-    { id: 'nasdaq100', label: 'Nasdaq 100 Index' },
-    { id: 'nyse_composite', label: 'NYSE Composite Index' },
-  ]
-
-  const hasInvested = (id) => (HISTORICAL_INDEX[id]?.length || 0) > 1
-  const ppfInvested = hasInvested('ppf')
-  const fdInvested = hasInvested('fd')
-
-  holdingsList.sort((a, b) => {
-    const aInv = hasInvested(a.id)
-    const bInv = hasInvested(b.id)
-    if (aInv && !bInv) return -1
-    if (!aInv && bInv) return 1
-    if (!aInv && !bInv) {
-      if (a.id === 'fd' && b.id === 'ppf') return ppfInvested ? 1 : -1
-      if (a.id === 'ppf' && b.id === 'fd') return fdInvested ? 1 : -1
+  const cutoffDays = PERF_RANGES.find((r) => r.id === perfRange)?.days
+  const cutoffMs = cutoffDays ? Date.parse(v.as_of) - cutoffDays * 86400000 : null
+  const filterAndRebase = (ptsArr) => {
+    if (!ptsArr || ptsArr.length < 2) return null
+    if (!cutoffMs) return ptsArr
+    const inRangePts = ptsArr.filter((p) => p[0] >= cutoffMs)
+    if (inRangePts.length < 2) {
+      return ptsArr.length >= 2 ? ptsArr.slice(-2) : null
     }
-    return 0
-  })
-
-  const renderBadge = (opt) => {
-    const hasData = (HISTORICAL_INDEX[opt.id]?.length || 0) > 1
-    const isChecked = enabledSeries.has(opt.id) && hasData
-    const isInvested = hasData
-    const labelText = isInvested ? opt.label : `${opt.label} (not invested)`
-    const col = sleeveColor(opt.id)
-
-    return `<span data-series-toggle="${opt.id}" data-disabled="${!hasData}" style="display:inline-flex;align-items:center;gap:7px;cursor:${hasData ? 'pointer' : 'default'};opacity:${hasData ? (isChecked ? '1' : '0.45') : '0.25'};user-select:none;font-size:12.5px;padding:3px 6px;border-radius:4px;border:1px solid ${isChecked ? col : 'transparent'}">
-      <i style="width:11px;height:11px;border-radius:2px;background:${isChecked ? col : 'transparent'};border:1.5px solid ${col};display:inline-block"></i>
-      <span style="color:${isChecked ? 'var(--ink)' : 'var(--muted)'};font-weight:${isChecked ? '600' : '400'}">${esc(labelText)}</span>
-    </span>`
+    const baseVal = inRangePts[0][1] || 100
+    return inRangePts.map((p) => [p[0], (p[1] / baseVal) * 100])
   }
 
-  const holdingsBadges = holdingsList.map(renderBadge).join('')
-  const indicesBadges = indicesList.map(renderBadge).join('')
+  // Desired order of instruments:
+  // 1. Overall Portfolio, 2. IN Stocks, 3. US Stocks, 4. IN Mutual Funds, 5. Gold, 6. Bitcoin, 7. PPF, 8. FD, (EPF)
+  const INSTRUMENT_ORDER = [
+    { key: 'portfolio', label: 'Overall Portfolio', color: '#ffffff', dash: '', width: 3.4 },
+    { key: 'in_equity', label: 'IN Stocks', color: '#4363d8', dash: '', width: 2.4 },
+    { key: 'us_equity', label: 'US Stocks', color: '#3cb44b', dash: '', width: 2.4 },
+    { key: 'in_mf', label: 'IN Mutual Funds', color: '#f58231', dash: '', width: 2.4 },
+    { key: 'gold', label: 'Gold', color: sleeveColor('gold'), dash: '', width: 2.4 },
+    { key: 'btc', label: 'Bitcoin', color: '#911eb4', dash: '', width: 2.4 },
+    { key: 'fd', label: 'Fixed Deposits', color: '#f032e6', dash: '', width: 2.4 },
+    { key: 'ppf', label: 'PPF', color: '#9A6324', dash: '', width: 2.4 },
+    { key: 'epf', label: 'EPF', color: '#469990', dash: '', width: 2.4 },
+  ]
 
-  return `${chart}
-    <div style="border:1px solid #ff0000;padding:10px;border-radius:6px;margin:12px 0 8px;">
-      <div class="legend" style="margin-bottom:8px;padding-bottom:4px;border-bottom:1px solid rgba(255,255,255,0.07)">
-        ${holdingsBadges}
-      </div>
-      <div class="legend" style="margin-top:0">
-        ${indicesBadges}
-      </div>
-    </div>
-    <p class="note">Each sleeve starts at 100 on the date of its first investment (or ${shortDate(startDate)} for overall portfolio and benchmark indices), so the lines compare <i>rates</i> of growth rather than portfolio size. Click on any graph line or legend label to toggle it. Sleeves without investments are marked (not invested).</p>`
+  const activeInstruments = []
+  for (const item of INSTRUMENT_ORDER) {
+    if (item.key === 'portfolio') {
+      const match = v.compare?.series?.find((s) => s.key === 'portfolio')
+      if (match && match.points.length > 1) {
+        const rebased = filterAndRebase(pts(match.points))
+        if (rebased && rebased.length > 1) {
+          activeInstruments.push({ ...item, points: rebased })
+        }
+      }
+    } else {
+      const sl = v.sleeves?.find((s) => s.sleeve === item.key)
+      const isInvested = sl && (sl.value > 0 || sl.invested > 0 || (sl.holdings && sl.holdings.length > 0))
+      if (isInvested && v.index[item.key] && v.index[item.key].length > 1) {
+        const rebased = filterAndRebase(pts(v.index[item.key]))
+        if (rebased && rebased.length > 1) {
+          activeInstruments.push({ ...item, points: rebased })
+        }
+      }
+    }
+  }
+
+  // Benchmark indices
+  const INDEX_ORDER = [
+    { key: 'nifty50', label: 'Nifty 50', color: '#ffe119', dash: '7 5', width: 2.2 },
+    { key: 'nifty_midcap150', label: 'Nifty Midcap 150', color: '#e6194B', dash: '7 5', width: 2.2 },
+    { key: 'nifty_smallcap250', label: 'Nifty Smallcap 250', color: '#fabed4', dash: '7 5', width: 2.2 },
+    { key: 'sp500', label: 'S&P 500', color: '#fffac8', dash: '2 5', width: 2.2 },
+    { key: 'nasdaq100', label: 'Nasdaq 100', color: '#42d4f4', dash: '2 5', width: 2.2 },
+    { key: 'nyse_composite', label: 'NYSE Composite', color: '#bfef45', dash: '2 5', width: 2.2 },
+  ]
+
+  const activeIndices = []
+  for (const idx of INDEX_ORDER) {
+    const match = v.compare?.series?.find((s) => s.key === idx.key)
+    if (match && match.points.length > 1) {
+      const rebased = filterAndRebase(pts(match.points))
+      if (rebased && rebased.length > 1) {
+        activeIndices.push({ ...idx, points: rebased })
+      }
+    }
+  }
+
+  const all = [...activeInstruments, ...activeIndices]
+  const shown = all.filter((s) => !hidden.has(s.key))
+  currentShownSeries = shown
+  const chart = shown.length
+    ? lineChart({ series: shown, yFormat: (n) => String(Math.round(n * 10) / 10), xFormat: (ms) => shortDate(new Date(ms).toISOString().slice(0, 10)), baseline: 100, title: 'Every sleeve, your portfolio and the market indices, indexed to 100' })
+    : '<div class="empty">Every line is hidden. Click a name below to bring it back.</div>'
+
+  const firstDate = shown[0]?.points?.[0] ? shortDate(new Date(shown[0].points[0][0]).toISOString().slice(0, 10)) : 'invested date'
+
+  const renderToggle = (s) => {
+    const off = hidden.has(s.key)
+    return `<button type="button" class="legend-toggle lg${off ? ' off' : ''}" data-key="${esc(s.key)}" data-toggle="${esc(s.key)}" aria-pressed="${!off}" style="--lg-color:${s.color}" title="${off ? 'Show' : 'Hide'} ${esc(s.label)}">` +
+      `<i class="swatch" style="background:${s.color}"></i>${esc(s.label)}</button>`
+  }
+
+  const legendHtml = `
+    <div class="legend legend-instruments" style="margin-top:12px">${activeInstruments.map(renderToggle).join('')}</div>
+    <div class="legend legend-indices" style="margin-top:8px">${activeIndices.map(renderToggle).join('')}${hidden.size ? '<button type="button" class="legend-toggle lg-reset" data-show-all>Show all</button>' : ''}</div>
+  `
+
+  return `<div data-chart style="position:relative">
+    ${chart}
+    <div class="drag-tooltip" style="display:none;position:absolute;bottom:14px;left:50%;transform:translateX(-50%);background:#18181b;border:1px solid #3f3f46;border-radius:6px;padding:6px 14px;font-size:12.5px;color:var(--ink);box-shadow:0 4px 16px rgba(0,0,0,0.6);pointer-events:none;z-index:10;white-space:nowrap;align-items:center;gap:8px"></div>
+    ${legendHtml}
+  </div>
+    <p class="note">Click a name to hide its line (the chart rescales); hover a name or a line to light it up. Drag across the chart to measure change. Each sleeve line starts at 100 on its invested date (${firstDate}), so the lines compare <i>rates</i> of change rather than sizes. They are time-weighted: money you added or took out is left out, so a SIP never reads as a gain and a sale never reads as a crash. The thick white line is your overall portfolio; dashed lines are benchmark indices.</p>`
 }
 
 const INCOME_KINDS = [['dividends', 'Dividends', 'var(--cat-1)'], ['interest', 'Interest', 'var(--cat-3)'], ['unspecified', 'No note', 'var(--cat-other)']]
 
 function incomeCard() {
+  if (getSetting('wallet_has_dividends', true) === false) return ''
   const i = incomeView()
   if (!i) return ''
   const pg = paginate('income-payers', i.payers, { size: 10 })
@@ -198,7 +155,7 @@ function incomeCard() {
     keys: kinds.map(([k]) => k).reverse(), color: (k) => INCOME_KINDS.find(([x]) => x === k)[2], yFormat: compact, title: 'Dividends and interest received by month', link: false,
   })
   const stat = (label, value, sub) => `<div><div class="hero-label">${label}</div><div class="hero-figure">${value}</div><div class="hero-secondary" style="margin-top:2px;font-size:13px">${sub}</div></div>`
-  return `<section class="card"><header><h2>Income from investments — last 12 months</h2></header>
+  return `<section class="card"><header><h2>Income from investments - last 12 months</h2></header>
     <div class="grid stats" style="margin-bottom:12px">
       ${stat('Received', moneyExact(i.total), `${monthLabel(i.from)} to ${monthLabel(i.to)}`)}
       ${stat('A month', compact(i.monthly_avg), `paid in ${i.months_paid} of 12 months`)}
@@ -206,127 +163,234 @@ function incomeCard() {
       ${stat('Interest', compact(i.interest), i.unspecified ? `plus ${compact(i.unspecified)} with no note` : 'bank and FD interest')}
     </div>${chart}
     <div class="legend">${kinds.map(([, l, c]) => `<span><i class="swatch" style="background:${c}"></i>${l}</span>`).join('')}</div>
-    ${i.payers.length ? `<div style="margin-top:12px">${scrollBox(`<table class="data"><thead><tr><th>Biggest dividend payers</th><th class="num">Received</th><th class="num">Share</th></tr></thead><tbody>${pg.rows.map((p) => `<tr><td class="name">${esc(p.name)}</td><td class="num">${compact(p.amount)}</td><td class="num">${plain((p.amount / i.dividends) * 100, 0)}%</td></tr>`).join('')}</tbody></table>`)}${pg.controls}</div>` : ''}
+    ${i.payers.length ? `<div style="margin-top:12px">${scrollBox(`<table class="data"><thead><tr><th>Biggest dividend payers</th><th class="num">Received</th><th class="num">Allocation</th></tr></thead><tbody>${pg.rows.map((p) => { const payerName = esc((p.name || '').replace(/\bstocks?\b/gi, '').replace(/\s+/g, ' ').trim().toUpperCase()); return `<tr><td class="name">${payerName}</td><td class="num">${compact(p.amount)}</td><td class="num">${plain((p.amount / i.dividends) * 100, 0)}%</td></tr>` }).join('')}</tbody></table>`)}${pg.controls}</div>` : ''}
     <p class="note">Everything Wallet files under "Interest, dividends", counted when the money arrived. A credit you never entered in Wallet is not here. Wallet has no field for which it was, so the split reads the note: "interest" or "FD" means interest, any other note is read as a dividend from that name, and a credit with no note is shown separately rather than guessed. This is cash received, not a yield, and it makes no forecast.</p></section>`
 }
 
-const xirrCell = (x) => (x ? `${delta(x.pct, (n) => `${plain(n, 1)}%`)}<div style="color:var(--muted);font-size:12px">${x.basis === 'ledger' ? 'since first trade' : 'annualised'}</div>` : '—')
+const xirrCell = (x) => (x ? delta(x.pct, (n) => `${plain(n, 1)}%`) : '-')
 
 function holdingsTable(s) {
-  let list = [...s.holdings]
-  const dirMultiplier = holdingsSort.dir === 'asc' ? 1 : -1
+  const isMf = s.sleeve === 'in_mf'
+  const isPpfOrFd = s.sleeve === 'ppf' || s.sleeve === 'fd'
+  const isEpf = s.sleeve === 'epf'
+  const isNps = s.sleeve === 'nps'
 
-  list.sort((a, b) => {
-    const col = holdingsSort.col
-    if (col === 'name') return dirMultiplier * (a.name || a.symbol).localeCompare(b.name || b.symbol)
-    if (col === 'qty') return dirMultiplier * (Number(a.qty || 0) - Number(b.qty || 0))
-    if (col === 'price') return dirMultiplier * (Number(a.price || 0) - Number(b.price || 0))
-    if (col === 'value') return dirMultiplier * (Number(a.value || 0) - Number(b.value || 0))
-    if (col === 'invested') return dirMultiplier * (Number(a.invested || 0) - Number(b.invested || 0))
-    if (col === 'return_pct') {
-      const retA = a.return_pct !== null && a.return_pct !== undefined ? a.return_pct : -999999
-      const retB = b.return_pct !== null && b.return_pct !== undefined ? b.return_pct : -999999
-      return dirMultiplier * (retA - retB)
+  const sortedHoldings = [...s.holdings].sort((a, b) => {
+    let cmp = 0
+    if (holdingsSortCol === 'name') {
+      const na = a.name || a.symbol || ''
+      const nb = b.name || b.symbol || ''
+      cmp = na.localeCompare(nb)
+    } else if (holdingsSortCol === 'qty') {
+      cmp = (Number(a.qty) || 0) - (Number(b.qty) || 0)
+    } else if (holdingsSortCol === 'price') {
+      const pa = a.avg_cost !== null && a.avg_cost !== undefined ? Number(a.avg_cost) : (Number(a.price) || 0)
+      const pb = b.avg_cost !== null && b.avg_cost !== undefined ? Number(b.avg_cost) : (Number(b.price) || 0)
+      cmp = pa - pb
+    } else if (holdingsSortCol === 'invested') {
+      const ia = a.invested !== null && a.invested !== undefined ? Number(a.invested) : (Number(a.invested_inr) || 0)
+      const ib = b.invested !== null && b.invested !== undefined ? Number(b.invested) : (Number(b.invested_inr) || 0)
+      cmp = ia - ib
+    } else if (holdingsSortCol === 'value') {
+      cmp = (Number(a.value) || 0) - (Number(b.value) || 0)
+    } else if (holdingsSortCol === 'return_pct') {
+      const ra = a.return_pct !== null && a.return_pct !== undefined ? Number(a.return_pct) : -9999
+      const rb = b.return_pct !== null && b.return_pct !== undefined ? Number(b.return_pct) : -9999
+      cmp = ra - rb
+    } else if (holdingsSortCol === 'buy_date') {
+      if (!a.buy_date && !b.buy_date) return 0
+      if (!a.buy_date) return 1
+      if (!b.buy_date) return -1
+      cmp = a.buy_date.localeCompare(b.buy_date)
+    } else if (holdingsSortCol === 'share_pct') {
+      cmp = (Number(a.share_pct) || 0) - (Number(b.share_pct) || 0)
     }
-    if (col === 'bought_on') {
-      const dateA = getBuyDate(a) || ''
-      const dateB = getBuyDate(b) || ''
-      return dirMultiplier * dateA.localeCompare(dateB)
-    }
-    if (col === 'holding_days') {
-      const daysA = getHoldingDays(a) !== null ? getHoldingDays(a) : -1
-      const daysB = getHoldingDays(b) !== null ? getHoldingDays(b) : -1
-      return dirMultiplier * (daysA - daysB)
-    }
-    if (col === 'account') return dirMultiplier * (a.account || '').localeCompare(b.account || '')
-    if (col === 'currency') return dirMultiplier * (a.currency || 'INR').localeCompare(b.currency || 'INR')
-    return 0
+    return holdingsSortDir === 'asc' ? cmp : -cmp
   })
 
-  const pg = paginate(`holdings-${s.sleeve}`, list, { size: 25 })
-  return `<section class="card"><header><h2>${esc(sleeveLabel(s.sleeve))} — holdings</h2><span class="spacer"></span>
-    <span class="hero-label" style="margin-right:12px">${s.holdings.length}</span>
-    <button class="btn" data-open="${s.sleeve}">Hide holdings</button></header>
-    ${scrollBox(`<table class="data"><thead><tr>
-      <th style="cursor:pointer;user-select:none" data-holdings-sort="name">Holding ${holdingsSortIcon('name')}</th>
-      <th class="num" style="cursor:pointer;user-select:none" data-holdings-sort="qty">Qty ${holdingsSortIcon('qty')}</th>
-      <th class="num" style="cursor:pointer;user-select:none" data-holdings-sort="price">Price ${holdingsSortIcon('price')}</th>
-      <th class="num" style="cursor:pointer;user-select:none" data-holdings-sort="value">Value ${holdingsSortIcon('value')}</th>
-      <th class="num" style="cursor:pointer;user-select:none" data-holdings-sort="invested">Invested ${holdingsSortIcon('invested')}</th>
-      <th class="num" style="cursor:pointer;user-select:none" data-holdings-sort="return_pct">Since bought ${holdingsSortIcon('return_pct')}</th>
-      <th class="num" style="cursor:pointer;user-select:none" data-holdings-sort="bought_on">Bought on ${holdingsSortIcon('bought_on')}</th>
-      <th class="num" style="cursor:pointer;user-select:none" data-holdings-sort="holding_days">Holding days ${holdingsSortIcon('holding_days')}</th>
-      <th style="cursor:pointer;user-select:none" data-holdings-sort="account">Account ${holdingsSortIcon('account')}</th>
-      <th style="cursor:pointer;user-select:none" data-holdings-sort="currency">Currency ${holdingsSortIcon('currency')}</th>
-    </tr></thead><tbody>
+  const pg = paginate(`holdings-${s.sleeve}`, sortedHoldings, { size: 25 })
+
+  const th = (label, colKey) => `<th style="cursor:pointer;user-select:none;text-align:center" data-sort-holdings="${colKey}">${label} ${holdingsSortIcon(colKey)}</th>`
+
+  const showInvestedOn = getSetting('wallet_has_stock_buys', true) !== false
+  let ths = ''
+  if (isEpf) {
+    ths = `${th('Holding', 'name')}${th('Curr. Value', 'value')}${th('Allocation', 'share_pct')}`
+  } else if (isNps) {
+    ths = `${th('Holding', 'name')}${th('Invested', 'invested')}${th('Curr. Value', 'value')}${th('Since bought', 'return_pct')}${th('Allocation', 'share_pct')}`
+  } else if (isMf) {
+    ths = `${th('Holding', 'name')}${th('Units', 'qty')}${th('Curr. NAV', 'price')}${th('Invested', 'invested')}${th('Current', 'value')}${th('Since bought', 'return_pct')}${showInvestedOn ? th('Invested on', 'buy_date') : ''}${th('Allocation', 'share_pct')}`
+  } else if (isPpfOrFd) {
+    ths = `${th('Holding', 'name')}${th('Invested', 'invested')}${th('Curr. Value', 'value')}${th('Since bought', 'return_pct')}${showInvestedOn ? th('Invested on', 'buy_date') : ''}`
+  } else {
+    ths = `${th('Holding', 'name')}${th('Qty', 'qty')}${th('Avg. Price', 'price')}${th('Invested', 'invested')}${th('Curr. Value', 'value')}${th('Since bought', 'return_pct')}${showInvestedOn ? th('Invested on', 'buy_date') : ''}${th('Allocation', 'share_pct')}`
+  }
+
+  return `<section class="card"><header><h2>${esc(sleeveLabel(s.sleeve))} - Holdings</h2><span class="spacer"></span><span class="hero-label">${s.holdings.length}</span></header>${scrollBox(`<table class="data holdings-data"><thead><tr>${ths}</tr></thead><tbody>
     ${pg.rows.map((h) => {
-      const buyDate = getBuyDate(h)
-      const hDays = getHoldingDays(h)
-      return `<tr><td class="name"><b>${esc(h.symbol)}</b> <span style="color:var(--muted)">${esc(h.name && h.name !== h.symbol ? h.name : '')}</span>${h.flagged ? ' <span class="tag" title="Flow above 25% of the sleeve: a split or bonus?">flow flag</span>' : ''}</td>
-      <td class="num">${plain(h.qty, h.qty % 1 ? 4 : 0)}</td>
-      <td class="num">${moneyExact(h.price, h.currency)}</td>
-      <td class="num">${money(h.value)}</td>
-      <td class="num">${h.invested === null ? '—' : money(h.invested)}</td>
-      <td class="num">${h.return_pct === null ? '—' : `${delta(h.return_pct, (n) => `${plain(n)}%`)}<div style="color:var(--muted);font-size:12px">${compact(h.unrealised)}</div>`}</td>
-      <td class="num" style="color:${buyDate ? 'var(--ink)' : 'var(--muted)'};font-size:12.5px">${buyDate ? formatDdmmyy(buyDate) : '—'}</td>
-      <td class="num" style="color:${hDays !== null ? 'var(--ink)' : 'var(--muted)'};font-size:12.5px">${hDays !== null ? `${hDays} days` : '—'}</td>
-      <td>${esc(h.account || '—')}</td>
-      <td>${esc(h.currency || 'INR')}</td></tr>`
+      let holdingName = h.name || h.symbol || ''
+      if (s.sleeve === 'fd') {
+        holdingName = h.bank || holdingName.replace(/^[0-9.]+%?\s*/, '').replace(/\s*FD.*$/i, '').trim() || h.symbol
+      } else if (s.sleeve === 'btc') {
+        holdingName = holdingName.toLowerCase().includes('manual') ? 'Bitcoin (Manual)' : (h.source ? `Bitcoin (${h.source})` : 'Bitcoin')
+      } else if (s.sleeve === 'us_equity') {
+        holdingName = h.name || h.symbol
+      } else if (s.sleeve === 'ppf') {
+        holdingName = h.name || 'PPF'
+      }
+
+      const avgBuyPrice = h.avg_cost !== null && h.avg_cost !== undefined ? h.avg_cost : (h.invested && h.qty ? h.invested / h.qty : h.price)
+      const isNativeUsd = h.currency === 'USD'
+      const displayPrice = isMf ? formatPrice(h.price, isNativeUsd) : formatPrice(avgBuyPrice, isNativeUsd)
+      const investedVal = h.invested !== null && h.invested !== undefined ? money(h.invested) : '-'
+      const investOnDate = h.buy_date ? shortDate(h.buy_date) : '-'
+
+      let sinceBoughtHtml = '-'
+      if (h.return_pct !== null && h.return_pct !== undefined) {
+        sinceBoughtHtml = `${delta(h.return_pct, (v) => `${plain(v)}%`)}<div style="color:var(--muted);font-size:12px">${compact(h.unrealised)}</div>`
+      }
+
+      if (isEpf) {
+        return `<tr>
+          <td class="name">${esc(holdingName)}</td>
+          <td>${money(h.value)}</td>
+          <td>${plain(h.share_pct, 1)}%</td>
+        </tr>`
+      } else if (isNps) {
+        return `<tr>
+          <td class="name">${esc(holdingName)}</td>
+          <td>${investedVal}</td>
+          <td>${money(h.value)}</td>
+          <td>${sinceBoughtHtml}</td>
+          <td>${plain(h.share_pct, 1)}%</td>
+        </tr>`
+      } else if (isMf) {
+        return `<tr>
+          <td class="name">${esc(holdingName)}</td>
+          <td>${plain(h.qty, h.qty % 1 ? 4 : 0)}</td>
+          <td>${displayPrice}</td>
+          <td>${investedVal}</td>
+          <td>${money(h.value)}</td>
+          <td>${sinceBoughtHtml}</td>
+          ${showInvestedOn ? `<td>${investOnDate}</td>` : ''}
+          <td>${plain(h.share_pct, 1)}%</td>
+        </tr>`
+      } else if (isPpfOrFd) {
+        return `<tr>
+          <td class="name">${esc(holdingName)}</td>
+          <td>${investedVal}</td>
+          <td>${money(h.value)}</td>
+          <td>${sinceBoughtHtml}</td>
+          ${showInvestedOn ? `<td>${investOnDate}</td>` : ''}
+        </tr>`
+      } else {
+        return `<tr>
+          <td class="name">${esc(holdingName)}${h.flagged ? ' <span class="tag" title="Flow above 25% of the sleeve: a split or bonus?">flow flag</span>' : ''}</td>
+          <td>${plain(h.qty, h.qty % 1 ? 4 : 0)}</td>
+          <td>${displayPrice}</td>
+          <td>${investedVal}</td>
+          <td>${money(h.value)}</td>
+          <td>${sinceBoughtHtml}</td>
+          ${showInvestedOn ? `<td>${investOnDate}</td>` : ''}
+          <td>${plain(h.share_pct, 1)}%</td>
+        </tr>`
+      }
     }).join('')}
     </tbody></table>`)}${pg.controls}</section>`
 }
 
 export function render(el) {
+  let current = null
   const draw = () => {
-    const x = investmentsView(range)
-    if (!x) { el.innerHTML = '<div class="empty">No checkpoints yet.</div>'; return }
+    const x = current = investmentsView(range)
+    if (!x) { el.innerHTML = '<div class="empty">No investments data available.</div>'; return }
     el.innerHTML = `<div class="grid" style="gap:16px">
     <section class="card"><header><h2>Investments - ${x.checkpoints_in_range} checkpoint${x.checkpoints_in_range === 1 ? '' : 's'} in range</h2><span class="spacer"></span>
       <div class="tabs">${RANGE_IDS.map((r) => `<button class="btn" data-range="${r}" aria-pressed="${r === range}">${RANGE_LABEL[r]}</button>`).join(' ')}</div></header>
-      <div class="hero"><div class="hero-primary"><div><div class="hero-label">Total investments</div><div class="hero-figure">${money(x.total.value)}</div><div class="hero-secondary">${moneyExact(x.total.invested)} invested${x.total.partial ? ' (some holdings have no cost basis)' : ''}</div></div>
-      <div><div class="hero-label">Since bought</div><div class="hero-figure" style="font-size:36px">${x.total.return_pct === null ? '-' : delta(x.total.return_pct, (n) => `${plain(n)}%`)}</div><div class="hero-secondary">${compact(x.total.unrealised)} unrealised${x.xirr === null || x.xirr === undefined ? '' : ` · <span title="Money-weighted: the annual rate that accounts for when you added money. Set it against an FD rate.">XIRR ${delta(x.xirr, (n) => `${plain(n, 1)}%`)} a year</span>`}</div></div></div>
-      <p class="note">${x.compared_to ? `Comparing ${shortDate(x.compared_to)} with ${shortDate(x.as_of)}.` : `As of ${shortDate(x.as_of)}. Market / flow / FX appear once there are two checkpoints.`}</p></section>
-    <section class="card"><header><h2>Performance - every sleeve indexed to 100</h2></header>${indexed(x)}</section>
+      <div class="grid cols-2" style="gap:28px"><div><div class="hero-label">Current value</div><div class="hero-figure">${moneyExact(x.total.value)}</div><div class="hero-secondary">${moneyExact(x.total.invested)} invested${x.total.partial ? ' (some holdings have no cost basis)' : ''}</div></div>
+      <div><div class="hero-label">Since bought</div><div class="hero-figure" style="font-size:36px">${x.total.return_pct === null ? '-' : delta(x.total.return_pct, (n) => `${plain(n)}%`)}</div><div class="hero-secondary">${compact(x.total.unrealised)} unrealised${x.xirr === null ? '' : ` · <span title="Money-weighted: the annual rate that accounts for when you added money. Set it against an FD rate.">XIRR ${delta(x.xirr, (n) => `${plain(n, 1)}%`)} a year</span>`}</div></div></div>
+      <p class="note">${x.compared_to ? `Comparing ${shortDate(x.compared_to)} with ${shortDate(x.as_of)}.` : `As of ${shortDate(x.as_of)}. Market / Flow / FX appear once there are two checkpoints.`}</p></section>
+    <section class="card"><header><h2>Performance - every sleeve, your portfolio and the market, indexed to 100</h2><span class="spacer"></span>
+      <div class="tabs">${PERF_RANGES.map((r) => `<button class="btn" data-perf-range="${r.id}" aria-pressed="${r.id === perfRange}">${r.label}</button>`).join(' ')}</div></header>
+      <div data-perf-body>${indexed(x)}</div></section>
     <section class="card"><header><h2>By sleeve</h2></header><div class="table-wrap"><table class="data"><thead><tr><th>Sleeve</th><th class="num">Value</th><th class="num">Invested</th><th class="num">Since bought</th><th class="num" title="Money-weighted annual return">XIRR</th><th class="num">Market</th><th class="num">Flow</th><th class="num">FX</th></tr></thead><tbody>
-      ${x.sleeves.map((s) => `<tr><td class="name"><button class="row-btn" data-open="${s.sleeve}" title="Show the holdings"><i class="dot" style="background:${sleeveColor(s.sleeve)}"></i><span class="name">${esc(sleeveLabel(s.sleeve))}</span> <span style="color:var(--muted);margin-left:6px">▸ ${s.holdings.length}</span></button></td>
+      ${x.sleeves.map((s) => {
+        const isEpf = s.sleeve === 'epf'
+        return `<tr><td class="name"><button class="row-btn" data-open="${s.sleeve}" title="Show the holdings"><i class="dot" style="background:${sleeveColor(s.sleeve)}"></i><span class="name">${esc(sleeveLabel(s.sleeve))}</span> <span style="color:var(--muted);margin-left:6px">▸ ${s.holdings.length}</span></button></td>
         <td class="num">${compact(s.value)}</td><td class="num">${compact(s.invested)}${s.partial ? '*' : ''}</td>
-        <td class="num">${s.return_pct === null ? '-' : `${delta(s.return_pct, (n) => `${plain(n)}%`)}<div style="color:var(--muted);font-size:12px">${compact(s.unrealised)}</div>`}</td>
-        <td class="num">${xirrCell(s.xirr)}</td>
-        <td class="num">${s.market === null ? '-' : delta(s.market)}</td><td class="num">${s.flow === null ? '-' : delta(s.flow)}</td><td class="num">${s.fx === null ? '-' : delta(s.fx)}</td></tr>`).join('')}
+        <td class="num">${isEpf || s.return_pct === null ? '-' : `${delta(s.return_pct, (n) => `${plain(n)}%`)}<div style="color:var(--muted);font-size:12px">${compact(s.unrealised)}</div>`}</td>
+        <td class="num">${isEpf ? '-' : xirrCell(s.xirr)}</td>
+        <td class="num">${isEpf || s.market === null ? '-' : delta(s.market)}</td>
+        <td class="num">${isEpf || s.flow === null || s.flow === 0 ? '-' : delta(s.flow)}</td>
+        <td class="num">${isEpf || s.fx === null || s.fx === 0 ? '-' : delta(s.fx)}</td></tr>`
+      }).join('')}
       </tbody></table></div>
-      <p class="note"><b>Since bought</b> is cost basis against today's value. <b>Market / flow / fx</b> is what happened between the two checkpoints: the price moving, money you added or took out, and the rupee moving. They sum to the change exactly, which is what stops a SIP looking like a gain. <b>XIRR</b> is the annual rate that accounts for when you added money; it needs about three months of history, or a trade ledger for the exact dates.${x.sleeves.some((s) => s.stale) ? ' A sleeve whose source was stale is left out of the split rather than booked as a crash.' : ''}</p></section>
-    ${incomeCard()}
-    ${open && x.sleeves.find((s) => s.sleeve === open) ? holdingsTable(x.sleeves.find((s) => s.sleeve === open)) : ''}</div>`
+      <p class="note"><b>Since bought</b> is cost basis against today's value. <b>Market / Flow / FX</b> is what happened between the two checkpoints: the price moving, money you added or took out, and the rupee moving. They sum to the change exactly, which is what stops a SIP looking like a gain. <b>XIRR</b> is the annual rate that accounts for when you added money; it needs about three months of history, or a trade ledger for the exact dates.${x.sleeves.some((s) => s.stale) ? ' A sleeve whose source was stale is left out of the split rather than booked as a crash.' : ''}</p></section>
+    ${open && x.sleeves.find((s) => s.sleeve === open) ? holdingsTable(x.sleeves.find((s) => s.sleeve === open)) : ''}
+    ${incomeCard()}</div>`
   }
+
+  const drawPerf = () => {
+    const perfBody = el.querySelector('[data-perf-body]')
+    if (!perfBody || !current) return
+    perfBody.innerHTML = indexed(current)
+    for (const btn of el.querySelectorAll('[data-perf-range]')) {
+      btn.setAttribute('aria-pressed', btn.dataset.perfRange === perfRange ? 'true' : 'false')
+    }
+    bindHighlight(el)
+    if (currentShownSeries.length) {
+      bindChartDrag(el, currentShownSeries, (n) => String(Math.round(n * 10) / 10), (ms) => shortDate(new Date(ms).toISOString().slice(0, 10)))
+    }
+  }
+
   draw()
   bindHighlight(el)
   bindPager(el, draw)
+  if (currentShownSeries.length) {
+    bindChartDrag(el, currentShownSeries, (n) => String(Math.round(n * 10) / 10), (ms) => shortDate(new Date(ms).toISOString().slice(0, 10)))
+  }
+
   el.addEventListener('click', (e) => {
-    const sToggle = e.target.closest('[data-series-toggle]')
-    if (sToggle) {
-      const id = sToggle.dataset.seriesToggle
-      if (sToggle.dataset.disabled === 'true' || !(HISTORICAL_INDEX[id]?.length > 1)) return
-      if (enabledSeries.has(id)) {
-        if (enabledSeries.size > 1) enabledSeries.delete(id)
+    const pr = e.target.closest('[data-perf-range]')
+    if (pr) {
+      perfRange = pr.dataset.perfRange
+      drawPerf()
+      return
+    }
+    const sh = e.target.closest('[data-sort-holdings]')
+    if (sh) {
+      const col = sh.dataset.sortHoldings
+      if (holdingsSortCol === col) {
+        holdingsSortDir = holdingsSortDir === 'asc' ? 'desc' : 'asc'
       } else {
-        enabledSeries.add(id)
+        holdingsSortCol = col
+        holdingsSortDir = col === 'name' ? 'asc' : 'desc'
       }
       draw()
       return
     }
-    const hSort = e.target.closest('[data-holdings-sort]')
-    if (hSort) {
-      const col = hSort.dataset.holdingsSort
-      if (holdingsSort.col === col) {
-        holdingsSort.dir = holdingsSort.dir === 'asc' ? 'desc' : 'asc'
+    const t = e.target.closest('[data-toggle]'), all = e.target.closest('[data-show-all]')
+    if (t || all) { // redraw only the chart: the rest of the page has not changed
+      if (t) {
+        const k = t.dataset.toggle
+        if (!hidden.delete(k)) hidden.add(k)
       } else {
-        holdingsSort.col = col
-        holdingsSort.dir = ['name', 'currency', 'bought_on'].includes(col) ? 'asc' : 'desc'
+        if (hidden.size === 0) {
+          for (const k of ALL_BENCHMARK_KEYS) hidden.add(k)
+        } else {
+          hidden.clear()
+        }
       }
-      draw()
+      drawPerf()
       return
     }
-    const r = e.target.closest('[data-range]'); if (r) { range = r.dataset.range; draw(); return }
-    const o = e.target.closest('[data-open]'); if (o) { open = open === o.dataset.open ? null : o.dataset.open; draw(); return }
+    const r = e.target.closest('[data-range]'); if (r) { range = r.dataset.range; draw() }
+    const o = e.target.closest('[data-open]')
+    if (o) {
+      open = open === o.dataset.open ? null : o.dataset.open
+      holdingsSortCol = 'buy_date'
+      holdingsSortDir = 'desc'
+      draw()
+    }
   })
 }

@@ -35,7 +35,7 @@ export const MIGRATIONS = [
   CREATE TABLE balances (
     id            INTEGER PRIMARY KEY,
     checkpoint_id INTEGER NOT NULL REFERENCES checkpoints(id) ON DELETE CASCADE,
-    kind          TEXT NOT NULL,                  -- cash | credit_card | epf | splitwise
+    kind          TEXT NOT NULL,                  -- cash | credit_card | epf | splitwise | nps
     ref           TEXT NOT NULL,
     amount_inr    REAL NOT NULL,                  -- credit_card is stored positive = outstanding
     meta          TEXT,

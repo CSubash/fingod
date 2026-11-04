@@ -47,7 +47,7 @@ WALLET_MCP_TOKEN="<your_jwt_token_here>"
 BINANCE_API_KEY="<your_binance_api_key>"
 BINANCE_API_SECRET="<your_binance_api_secret>"
 # If using RSA Key:
-# BINANCE_PRIVATE_KEY_PATH="E:/Stocks/binance_private_key.pem"`
+# BINANCE_PRIVATE_KEY_PATH="/path/to/binance_private_key.pem"`
 
 /** Antigravity MCP configuration format (.gemini/settings.json). */
 export const ANTIGRAVITY_MCP_FORMAT = `{

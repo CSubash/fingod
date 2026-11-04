@@ -6,7 +6,7 @@ import { money } from './compute/num.js'
 import { BENCHMARKS } from './compute/benchmark.js'
 
 export const SLEEVES = ['in_equity', 'in_mf', 'us_equity', 'gold', 'debt', 'btc']
-export const BALANCE_KINDS = ['cash', 'credit_card', 'epf']
+export const BALANCE_KINDS = ['cash', 'credit_card', 'epf', 'nps']
 export const ASSET_KINDS = ['nps', 'ppf', 'property', 'gold_physical', 'vehicle', 'other']
 export const LIABILITY_KINDS = ['home_loan', 'car_loan', 'personal_loan', 'education_loan', 'other']
 const DATE = /^\d{4}-\d{2}-\d{2}$/
@@ -186,7 +186,7 @@ export function classify(payload) {
   if (payload && Array.isArray(payload.holdings) && payload.as_of_date) return 'checkpoint'
   if (payload && !Array.isArray(payload) && Array.isArray(payload.ledger)) return 'ledger'
   if (payload && !Array.isArray(payload) && !payload.as_of_date && payload.benchmarks && typeof payload.benchmarks === 'object' && Object.values(payload.benchmarks).every(Array.isArray)) return 'benchmarks'
-  if (payload && !Array.isArray(payload) && ['fixed_deposits', 'ppf', 'splitwise', 'trades', 'target_allocation', 'assets', 'liabilities'].some((k) => k in payload)) return 'standing'
+  if (payload && !Array.isArray(payload) && ['fixed_deposits', 'ppf', 'splitwise', 'trades', 'target_allocation', 'assets', 'liabilities', 'settings'].some((k) => k in payload)) return 'standing'
   if (payload && (Array.isArray(payload.transactions) || Array.isArray(payload))) return 'transactions'
   return null
 }
@@ -324,6 +324,7 @@ export function ingestStanding(p) {
   for (const a of p.assets || []) { saveAsset({ ...a, liability: false }); out.assets++ }
   for (const a of p.liabilities || []) { saveAsset({ ...a, liability: true }); out.liabilities++ }
   if (p.target_allocation && typeof p.target_allocation === 'object') { setSetting('target_allocation', p.target_allocation); out.target_allocation = true }
+  if (p.settings && typeof p.settings === 'object') { for (const [k, v] of Object.entries(p.settings)) setSetting(k, v) }
   return out
 }
 

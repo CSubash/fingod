@@ -4,7 +4,7 @@ import { diff, bySleeve } from '../src/compute/qtydiff.js'
 import { computeNetWorth } from '../src/compute/networth.js'
 import { accrued, value as fdValue } from '../src/compute/fd.js'
 import { allocate, DEFAULT_TARGET } from '../src/compute/allocation.js'
-import { returns, shares, fixedDepositReturns, ppfReturns, epfReturns } from '../src/compute/returns.js'
+import { returns, shares, fixedDepositReturns, ppfReturns, epfReturns, npsReturns } from '../src/compute/returns.js'
 import { balance as ppfBalance, quarterStart, quarterLabel, quartersBetween, rateFor } from '../src/compute/ppf.js'
 import { money } from '../src/compute/num.js'
 import { summarise, byPeriod, findDisposals } from '../src/compute/realised.js'
@@ -342,6 +342,28 @@ test('EPF sleeve: balance is value, contributions are flow, return is interest',
   assert.equal(compared.delta, 20000)
   assert.equal(compared.flow, 15000)
   assert.equal(compared.market, 5000)
+  assert.equal(compared.fx, 0)
+})
+
+test('NPS sleeve: balance is value, contributions are flow, return is interest', () => {
+  const balances = [
+    { kind: 'nps', ref: 'NPS Tier 1', amount_inr: 132283.33, meta: { invested_inr: 94000 } },
+  ]
+  const s = npsReturns(balances, '2026-11-01', null)
+  assert.equal(s.value, 132283.33)
+  assert.equal(s.invested, 94000)
+  assert.equal(s.unrealised, 38283.33)
+  assert.equal(s.holdings.length, 1)
+  assert.equal(s.holdings[0].symbol, 'NPS Tier 1')
+  assert.equal(s.holdings[0].unrealised, 38283.33)
+
+  const prevBalances = [
+    { kind: 'nps', ref: 'NPS Tier 1', amount_inr: 120000, meta: { invested_inr: 90000 } },
+  ]
+  const compared = npsReturns(balances, '2026-11-01', prevBalances)
+  assert.equal(compared.delta, 12283.33)
+  assert.equal(compared.flow, 4000)
+  assert.equal(compared.market, 8283.33)
   assert.equal(compared.fx, 0)
 })
 
